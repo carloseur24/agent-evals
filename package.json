@@ -1,0 +1,18 @@
+{
+  "name": "agent-evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node runner/run.mjs --self-test",
+    "dry": "node runner/run.mjs --dry-run",
+    "all": "node runner/run.mjs --all",
+    "doctor": "node scripts/doctor.mjs",
+    "validate": "node scripts/validate.mjs",
+    "new": "node scripts/new-case.mjs",
+    "from-session": "node scripts/from-session.mjs",
+    "guard:test": "node --test guardrails/tests/harness-guard.test.mjs",
+    "install:guardrails": "bash guardrails/scripts/install.sh",
+    "doctor:guardrails": "node guardrails/scripts/doctor.mjs"
+  }
+}
