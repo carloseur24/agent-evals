@@ -1,0 +1,9 @@
+runner/reports/
+runner/cases/drafts/
+guardrails/harness-guard.log
+AGENTS.md.bak
+*.log
+node_modules/
+.DS_Store
+__pycache__/
+*.pyc
