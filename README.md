@@ -187,4 +187,8 @@ dangerous actions during a live session. Evals are regression tests: they
 replay a scenario in a sandbox and score the resulting trajectory and artifact.
 Passing evals never enables the guard, and changing the guard requires running
 the evals rather than replacing them.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 # agent-evals
