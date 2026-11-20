@@ -8,7 +8,7 @@ global `AGENTS.md`.
 
 ```text
 guardrails/
-  plugins/harness-guard.js          fast-change budget and per-phase plan gate
+  plugins/harness-guard.js          fast-change budget, plan gate, protected-branch guard
   agents/plan-orchestrator.md       plan executor with edit and shell denied
   instructions/harness-invariants.md  source of the marked AGENTS.md block
   tests/harness-guard.test.mjs      deterministic guard self-test
@@ -81,3 +81,29 @@ node --test guardrails/tests/harness-guard.test.mjs
 The plugin writes `$AGENT_EVALS_STATE/harness-guard.log` (default
 `~/.local/state/agent-evals/harness-guard.log`); the file is generated and never
 committed.
+
+## Protected branches and branch names
+
+The guard blocks `git commit`, `git push`, and `git merge` while the current
+branch is `main` or `master`, in every session including child sessions. It also
+blocks a push whose refspec names `main` or `master` (for example
+`git push origin main`), and `git push --all` or `--mirror`. Read-only commands
+(`status`, `log`, `diff`, `show`, `branch --show-current`, `ls-remote`) are
+unaffected. `HARNESS_GUARD=log` records these decisions without blocking and
+`HARNESS_GUARD=off` disables them.
+
+Every other branch must follow:
+
+```text
+<repo>/<type>-<short-description>
+```
+
+For this repository the prefix is `agent-evals/`, as in
+`agent-evals/feat-agent-harness-first-loop`. Allowed types: `feat`, `fix`,
+`chore`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`, `style`. The
+description is lowercase letters, digits, and hyphens, starting with a letter or
+digit. The guard refuses `git switch -c` / `git checkout -b` with a
+non-conforming name and refuses a write on a non-conforming branch. The prefix
+comes from the repository name (the common git dir), so the check still works
+inside a worktree.
+
