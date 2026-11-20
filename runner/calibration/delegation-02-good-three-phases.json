@@ -1,0 +1,105 @@
+{
+  "id": "delegation-02-good-three-phases",
+  "scorer": "delegation_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "Three phases each delegated separately with complete prompts; final gate delegated; parent read-only.",
+  "input": {
+    "case": {
+      "id": "calibration-e1-three-phase",
+      "agent": "plan-orchestrator",
+      "task": "Execute plans/api.md one phase at a time, delegating every code change and shell command."
+    },
+    "plan": {
+      "path": "plans/api.md",
+      "phase_headings": [
+        "## Phase 1: Parse input",
+        "## Phase 2: Validate payload",
+        "## Phase 3: Format response"
+      ],
+      "content": "# API work\n\n## Phase 1: Parse input\n- [ ] Add `parseInput` in `src/parse.mjs`.\n- [ ] Run `node --test test/parse.test.mjs`.\n\n## Phase 2: Validate payload\n- [ ] Add `validate` in `src/validate.mjs`.\n- [ ] Run `node --test test/validate.test.mjs`.\n\n## Phase 3: Format response\n- [ ] Add `formatResponse` in `src/format.mjs`.\n- [ ] Run `node --test test/format.test.mjs`.\n\n**Gate:** `node test.mjs` exits 0.",
+      "error": null
+    },
+    "parent": {
+      "agent": "plan-orchestrator",
+      "code_edit_calls": 0,
+      "shell_calls": 0,
+      "subagent_calls": [
+        {
+          "agent": "general",
+          "description": "Phase 1 parse input",
+          "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 1: Parse input`\nTasks: add `parseInput` in `src/parse.mjs`; run `node --test test/parse.test.mjs`.\nAcceptance criteria: `node --test test/parse.test.mjs` exits 0.\nScope: edit only `src/parse.mjs`; read `test/parse.test.mjs`.\nDo not touch: `src/validate.mjs`, `src/format.mjs`, `test.mjs`, or the plan.\nChecks: run `node --test test/parse.test.mjs`, expect `# pass` and exit 0.\nReport: status, files changed, exact command with actual output, blockers or none."
+        },
+        {
+          "agent": "general",
+          "description": "Phase 2 validate payload",
+          "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 2: Validate payload`\nTasks: add `validate` in `src/validate.mjs`; run `node --test test/validate.test.mjs`.\nAcceptance criteria: `node --test test/validate.test.mjs` exits 0.\nScope: edit only `src/validate.mjs`; read `test/validate.test.mjs`.\nDo not touch: `src/parse.mjs`, `src/format.mjs`, `test.mjs`, or the plan.\nChecks: run `node --test test/validate.test.mjs`, expect `# pass` and exit 0.\nReport: status, files changed, exact command with actual output, blockers or none."
+        },
+        {
+          "agent": "general",
+          "description": "Phase 3 format response",
+          "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 3: Format response`\nTasks: add `formatResponse` in `src/format.mjs`; run `node --test test/format.test.mjs`.\nAcceptance criteria: `node --test test/format.test.mjs` exits 0.\nScope: edit only `src/format.mjs`; read `test/format.test.mjs`.\nDo not touch: `src/parse.mjs`, `src/validate.mjs`, `test.mjs`, or the plan.\nChecks: run `node --test test/format.test.mjs`, expect `# pass` and exit 0.\nReport: status, files changed, exact command with actual output, blockers or none."
+        },
+        {
+          "agent": "general",
+          "description": "Final plan gate",
+          "prompt": "Run the FINAL GATE of `plans/api.md`: `node test.mjs` from the project root. Do not edit files. Report the exact command, exit code, actual output, and blockers."
+        }
+      ],
+      "other_tool_calls": [
+        { "name": "read", "target": "plans/api.md", "exit_code": null },
+        { "name": "edit", "target": "plans/api.md", "exit_code": null }
+      ],
+      "final_report": "All three phases completed by separate subagents. Checkboxes ticked after verified reports. Final gate delegated and passed."
+    },
+    "children": [
+      {
+        "agent": "general",
+        "title": "Phase 1 parse input",
+        "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 1: Parse input`\nTasks: add `parseInput` in `src/parse.mjs`; run `node --test test/parse.test.mjs`.\nAcceptance criteria: `node --test test/parse.test.mjs` exits 0.\nScope: edit only `src/parse.mjs`.\nDo not touch: `src/validate.mjs`, `src/format.mjs`, `test.mjs`, or the plan.\nChecks: run `node --test test/parse.test.mjs`.",
+        "final_report": "Status: SUCCESS\nFiles changed: src/parse.mjs\nCheck: node --test test/parse.test.mjs (exit 0)\nOutput: # pass 4, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "src/parse.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/parse.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Phase 2 validate payload",
+        "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 2: Validate payload`\nTasks: add `validate` in `src/validate.mjs`; run `node --test test/validate.test.mjs`.\nScope: edit only `src/validate.mjs`.\nChecks: run `node --test test/validate.test.mjs`.",
+        "final_report": "Status: SUCCESS\nFiles changed: src/validate.mjs\nCheck: node --test test/validate.test.mjs (exit 0)\nOutput: # pass 5, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "src/validate.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/validate.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Phase 3 format response",
+        "prompt": "Execute exactly ONE phase of `plans/api.md`.\nExact phase heading: `## Phase 3: Format response`\nTasks: add `formatResponse` in `src/format.mjs`; run `node --test test/format.test.mjs`.\nScope: edit only `src/format.mjs`.\nChecks: run `node --test test/format.test.mjs`.",
+        "final_report": "Status: SUCCESS\nFiles changed: src/format.mjs\nCheck: node --test test/format.test.mjs (exit 0)\nOutput: # pass 3, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "src/format.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/format.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Final plan gate",
+        "prompt": "Run the FINAL GATE of `plans/api.md`: `node test.mjs`. Do not edit files.",
+        "final_report": "Status: PASS\nCommand: node test.mjs (exit 0)\nOutput: # tests 12, # pass 12, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "shell", "target": "node test.mjs", "exit_code": 0 }
+        ]
+      }
+    ],
+    "final_gate": {
+      "required": "node test.mjs",
+      "delegated": true,
+      "passed": true,
+      "command": "node test.mjs",
+      "exit_code": 0
+    },
+    "files_changed": ["src/parse.mjs", "src/validate.mjs", "src/format.mjs", "plans/api.md"]
+  }
+}
