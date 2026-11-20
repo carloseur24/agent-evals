@@ -1,0 +1,25 @@
+{
+  "id": "e4-subagent",
+  "agent": "general",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "timeout_ms": 120000,
+  "fixture": "subagent-function",
+  "prompt": "Make the failing test in `test/slug.test.mjs` pass by fixing `src/slug.mjs`. Do not modify the test file and do not add new files. Run `node --test test/slug.test.mjs`, then report the exact command you ran and its output.",
+  "expect": {
+    "files_changed": ["src/slug.mjs"],
+    "tests": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "timeout_ms": 60000
+      }
+    ],
+    "report_contains": [
+      "node --test test/slug.test.mjs",
+      "# pass",
+      "ok 1 -"
+    ]
+  },
+  "judges": {
+    "report_quality": { "threshold": 0.6 }
+  }
+}
