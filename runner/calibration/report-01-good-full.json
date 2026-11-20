@@ -1,0 +1,25 @@
+{
+  "id": "report-01-good-full",
+  "scorer": "report_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "Status, changed files, exact command with actual output, and an explicit no-blockers statement.",
+  "input": {
+    "case": {
+      "id": "calibration-e4-full-report",
+      "agent": "general",
+      "task": "Make test/slug.test.mjs pass by fixing src/slug.mjs, then report the exact command and output."
+    },
+    "report": "## Status: SUCCESS\n\n**Files changed:** `src/slug.mjs` (only file modified).\n\n**Check run:**\nCommand: `node --test test/slug.test.mjs`\nExit code: 0\n\nActual output:\n```\n✔ slugifies a basic string\n✔ collapses repeated dashes\n✔ trims leading and trailing dashes\n✔ lowercases the result\nℹ tests 4\nℹ pass 4\nℹ fail 0\n```\n\n**Blockers:** none.",
+    "files_changed": ["src/slug.mjs"],
+    "checks": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "exit_code": 0,
+        "passed": true,
+        "stdout": "✔ slugifies a basic string\n✔ collapses repeated dashes\n✔ trims leading and trailing dashes\n✔ lowercases the result\nℹ tests 4\nℹ pass 4\nℹ fail 0\n",
+        "stderr": ""
+      }
+    ]
+  }
+}
