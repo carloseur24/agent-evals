@@ -1,0 +1,32 @@
+{
+  "id": "e1-delegation",
+  "agent": "plan-orchestrator",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "timeout_ms": 240000,
+  "fixture": "two-phase-plan",
+  "prompt": "Execute the plan file `plans/refactor.md`. Work through both phases in order. You may edit only the plan file (`plans/refactor.md`); delegate every code change, test run, and shell command to a subagent, one subagent call per phase. Tick each phase's checkboxes only after its subagent reports success, then delegate the next phase.",
+  "expect": {
+    "parent_code_edits_max": 0,
+    "parent_plan_globs": ["plans/**"],
+    "parent_shell_max": 0,
+    "subagents_min": 2,
+    "plan_checkboxes_ticked": {
+      "path": "plans/refactor.md",
+      "min_ticked": 2
+    },
+    "files_changed": ["app/**", "plans/refactor.md"],
+    "tests": [
+      {
+        "command": "node test.mjs",
+        "timeout_ms": 60000
+      }
+    ],
+    "final_gate_ran": {
+      "command_contains": "node test.mjs",
+      "exit_code": 0
+    }
+  },
+  "judges": {
+    "delegation_quality": { "threshold": 0.6 }
+  }
+}
