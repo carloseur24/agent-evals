@@ -1,0 +1,25 @@
+{
+  "id": "report-03-good-failure-evidence",
+  "scorer": "report_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "An honest failing report with status, files, the real command/output, and the remaining blocker is complete evidence.",
+  "input": {
+    "case": {
+      "id": "calibration-e4-failed-report",
+      "agent": "general",
+      "task": "Fix src/slug.mjs and report the test command and its output."
+    },
+    "report": "## Status: FAILED\n\n**Files changed:** `src/slug.mjs`\n\n**Check run:**\nCommand: `node --test test/slug.test.mjs`\nExit code: 1\n\nActual output:\n```\n✔ collapses repeated dashes\n✖ preserves unicode letters\n  AssertionError: expected 'caf' to equal 'café'\nℹ tests 4\nℹ pass 3\nℹ fail 1\n```\n\n**Blockers:** the unicode normalization case still fails; the test expects accented letters preserved and the current fix strips them.",
+    "files_changed": ["src/slug.mjs"],
+    "checks": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "exit_code": 1,
+        "passed": false,
+        "stdout": "✔ collapses repeated dashes\n✖ preserves unicode letters\n  AssertionError: expected 'caf' to equal 'café'\nℹ tests 4\nℹ pass 3\nℹ fail 1\n",
+        "stderr": ""
+      }
+    ]
+  }
+}
