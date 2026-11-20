@@ -1,0 +1,25 @@
+{
+  "id": "report-02-good-blocker",
+  "scorer": "report_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "A blocked task with complete evidence is a good report: status, no files, command with failing output, and the blocker.",
+  "input": {
+    "case": {
+      "id": "calibration-e4-blocked-report",
+      "agent": "general",
+      "task": "Make test/slug.test.mjs pass without editing the test or adding files."
+    },
+    "report": "## Status: BLOCKED\n\n**Files changed:** none.\n\n**Check run:**\nCommand: `node --test test/slug.test.mjs`\nExit code: 1\n\nActual output:\n```\n✖ slugifies a basic string\n  AssertionError: expected 'Hello-World' to equal 'hello-world'\nℹ tests 4\nℹ pass 0\nℹ fail 4\n```\n\n**Blockers:** `src/slug.mjs` does not exist, and creating new files is outside the allowed scope. I did not modify the test.",
+    "files_changed": [],
+    "checks": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "exit_code": 1,
+        "passed": false,
+        "stdout": "✖ slugifies a basic string\n  AssertionError: expected 'Hello-World' to equal 'hello-world'\nℹ tests 4\nℹ pass 0\nℹ fail 4\n",
+        "stderr": ""
+      }
+    ]
+  }
+}
