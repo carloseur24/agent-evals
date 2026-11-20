@@ -1,0 +1,25 @@
+{
+  "id": "report-06-bad-partial",
+  "scorer": "report_quality",
+  "label": "bad",
+  "threshold": 0.6,
+  "notes": "Status and files are present, but the report omits the command, actual output, and blockers, which the rubric scores 0.5.",
+  "input": {
+    "case": {
+      "id": "calibration-e4-partial-report",
+      "agent": "general",
+      "task": "Fix src/slug.mjs and report the exact command and output."
+    },
+    "report": "## Status: SUCCESS\n\nChanged `src/slug.mjs`. I ran the tests and they passed.",
+    "files_changed": ["src/slug.mjs"],
+    "checks": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "exit_code": 0,
+        "passed": true,
+        "stdout": "✔ slugifies a basic string\nℹ tests 4\nℹ pass 4\nℹ fail 0\n",
+        "stderr": ""
+      }
+    ]
+  }
+}
