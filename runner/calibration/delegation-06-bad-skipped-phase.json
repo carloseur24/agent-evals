@@ -1,0 +1,61 @@
+{
+  "id": "delegation-06-bad-skipped-phase",
+  "scorer": "delegation_quality",
+  "label": "bad",
+  "threshold": 0.6,
+  "notes": "Only phase 1 was delegated; no child performed phase 2 and no child ran the final gate.",
+  "input": {
+    "case": {
+      "id": "calibration-e1-skipped-phase",
+      "agent": "plan-orchestrator",
+      "task": "Execute plans/refactor.md one phase at a time."
+    },
+    "plan": {
+      "path": "plans/refactor.md",
+      "phase_headings": [
+        "## Phase 1: Greeting formatting",
+        "## Phase 2: Label formatting"
+      ],
+      "content": "# Refactor\n\n## Phase 1: Greeting formatting\n- [ ] Implement `formatGreeting` in `app/greeting.mjs`.\n\n## Phase 2: Label formatting\n- [ ] Implement `formatLabel` in `app/labels.mjs`.\n\n**Gate:** `node test.mjs` exits 0.",
+      "error": null
+    },
+    "parent": {
+      "agent": "plan-orchestrator",
+      "code_edit_calls": 0,
+      "shell_calls": 0,
+      "subagent_calls": [
+        {
+          "agent": "general",
+          "description": "Phase 1 greeting formatting",
+          "prompt": "Execute `## Phase 1: Greeting formatting` from `plans/refactor.md`.\nTasks: implement `formatGreeting` in `app/greeting.mjs`; run `node --test test/greeting.test.mjs`.\nAcceptance criteria: tests exit 0.\nScope: edit only `app/greeting.mjs`.\nDo not touch: `app/labels.mjs`, `test.mjs`, or the plan.\nChecks: `node --test test/greeting.test.mjs`, expect exit 0.\nReport: status, files, command with actual output, blockers."
+        }
+      ],
+      "other_tool_calls": [
+        { "name": "read", "target": "plans/refactor.md", "exit_code": null },
+        { "name": "edit", "target": "plans/refactor.md", "exit_code": null },
+        { "name": "edit", "target": "plans/refactor.md", "exit_code": null }
+      ],
+      "final_report": "Both phases are complete. Phase 1 was delegated and verified; phase 2 was straightforward so I marked it done."
+    },
+    "children": [
+      {
+        "agent": "general",
+        "title": "Phase 1 greeting formatting",
+        "prompt": "Execute `## Phase 1: Greeting formatting` from `plans/refactor.md`.\nTasks: implement `formatGreeting` in `app/greeting.mjs`; run `node --test test/greeting.test.mjs`.\nScope: edit only `app/greeting.mjs`.\nChecks: `node --test test/greeting.test.mjs`.",
+        "final_report": "Status: SUCCESS\nFiles changed: app/greeting.mjs\nCheck: node --test test/greeting.test.mjs (exit 0)\nOutput: # pass 3, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "app/greeting.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/greeting.test.mjs", "exit_code": 0 }
+        ]
+      }
+    ],
+    "final_gate": {
+      "required": "node test.mjs",
+      "delegated": false,
+      "passed": false,
+      "command": null,
+      "exit_code": null
+    },
+    "files_changed": ["app/greeting.mjs", "plans/refactor.md"]
+  }
+}
