@@ -1,0 +1,71 @@
+{
+  "id": "delegation-03-good-single-phase",
+  "scorer": "delegation_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "A one-phase plan still gets a complete, separate delegation and a delegated final gate; parent is read-only.",
+  "input": {
+    "case": {
+      "id": "calibration-e1-single-phase",
+      "agent": "plan-orchestrator",
+      "task": "Execute plans/tidy.md and delegate the work."
+    },
+    "plan": {
+      "path": "plans/tidy.md",
+      "phase_headings": ["## Phase 1: Normalise whitespace"],
+      "content": "# Tidy\n\n## Phase 1: Normalise whitespace\n- [ ] Add `normalise` in `src/text.mjs`.\n- [ ] Run `node --test test/text.test.mjs`.\n\n**Gate:** `node test.mjs` exits 0.",
+      "error": null
+    },
+    "parent": {
+      "agent": "plan-orchestrator",
+      "code_edit_calls": 0,
+      "shell_calls": 0,
+      "subagent_calls": [
+        {
+          "agent": "general",
+          "description": "Phase 1 normalise whitespace",
+          "prompt": "You are executing ONE phase of `plans/tidy.md`.\nExact phase heading: `## Phase 1: Normalise whitespace`\nTasks: implement `normalise` in `src/text.mjs`; run `node --test test/text.test.mjs`.\nAcceptance criteria: all tests pass with exit code 0.\nScope: edit only `src/text.mjs`; read `test/text.test.mjs` and the plan.\nDo not touch: `test.mjs`, other source files, or the plan.\nChecks: run `node --test test/text.test.mjs`; expected `# pass` and exit 0.\nReport: status, files changed, exact command and actual output, blockers or none."
+        },
+        {
+          "agent": "general",
+          "description": "Final plan gate",
+          "prompt": "Run the FINAL GATE of `plans/tidy.md`: `node test.mjs` from the project root. Do not edit files. Report the exact command, exit code, actual output, and blockers."
+        }
+      ],
+      "other_tool_calls": [
+        { "name": "read", "target": "plans/tidy.md", "exit_code": null },
+        { "name": "edit", "target": "plans/tidy.md", "exit_code": null }
+      ],
+      "final_report": "The single phase was delegated, verified, and ticked. The final gate was delegated and passed."
+    },
+    "children": [
+      {
+        "agent": "general",
+        "title": "Phase 1 normalise whitespace",
+        "prompt": "You are executing ONE phase of `plans/tidy.md`.\nExact phase heading: `## Phase 1: Normalise whitespace`\nTasks: implement `normalise` in `src/text.mjs`; run `node --test test/text.test.mjs`.\nAcceptance criteria: exit code 0.\nScope: edit only `src/text.mjs`.\nDo not touch: `test.mjs` or the plan.\nChecks: run `node --test test/text.test.mjs`.",
+        "final_report": "Status: SUCCESS\nFiles changed: src/text.mjs\nCheck: node --test test/text.test.mjs (exit 0)\nOutput: # pass 6, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "src/text.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/text.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Final plan gate",
+        "prompt": "Run the FINAL GATE of `plans/tidy.md`: `node test.mjs`.",
+        "final_report": "Status: PASS\nCommand: node test.mjs (exit 0)\nOutput: # tests 9, # pass 9, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "shell", "target": "node test.mjs", "exit_code": 0 }
+        ]
+      }
+    ],
+    "final_gate": {
+      "required": "node test.mjs",
+      "delegated": true,
+      "passed": true,
+      "command": "node test.mjs",
+      "exit_code": 0
+    },
+    "files_changed": ["src/text.mjs", "plans/tidy.md"]
+  }
+}
