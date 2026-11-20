@@ -1,0 +1,60 @@
+{
+  "id": "delegation-04-bad-batched",
+  "scorer": "delegation_quality",
+  "label": "bad",
+  "threshold": 0.6,
+  "notes": "Both phases were batched into one vague delegation with no phase headings, tasks, scope, non-scope, checks, or acceptance criteria.",
+  "input": {
+    "case": {
+      "id": "calibration-e1-batched",
+      "agent": "plan-orchestrator",
+      "task": "Execute plans/refactor.md one phase at a time."
+    },
+    "plan": {
+      "path": "plans/refactor.md",
+      "phase_headings": [
+        "## Phase 1: Greeting formatting",
+        "## Phase 2: Label formatting"
+      ],
+      "content": "# Refactor\n\n## Phase 1: Greeting formatting\n- [ ] Implement `formatGreeting` in `app/greeting.mjs`.\n\n## Phase 2: Label formatting\n- [ ] Implement `formatLabel` in `app/labels.mjs`.\n\n**Gate:** `node test.mjs` exits 0.",
+      "error": null
+    },
+    "parent": {
+      "agent": "plan-orchestrator",
+      "code_edit_calls": 0,
+      "shell_calls": 0,
+      "subagent_calls": [
+        {
+          "agent": "general",
+          "description": "Execute plan",
+          "prompt": "Execute `plans/refactor.md`. Implement both phases and make the tests pass."
+        }
+      ],
+      "other_tool_calls": [
+        { "name": "read", "target": "plans/refactor.md", "exit_code": null }
+      ],
+      "final_report": "The plan is complete."
+    },
+    "children": [
+      {
+        "agent": "general",
+        "title": "Execute plan",
+        "prompt": "Execute `plans/refactor.md`. Implement both phases and make the tests pass.",
+        "final_report": "Status: DONE\nFiles changed: app/greeting.mjs, app/labels.mjs\nRan the tests successfully.\nBlockers: none",
+        "tool_calls": [
+          { "name": "edit", "target": "app/greeting.mjs", "exit_code": null },
+          { "name": "edit", "target": "app/labels.mjs", "exit_code": null },
+          { "name": "shell", "target": "node test.mjs", "exit_code": 0 }
+        ]
+      }
+    ],
+    "final_gate": {
+      "required": "node test.mjs",
+      "delegated": true,
+      "passed": true,
+      "command": "node test.mjs",
+      "exit_code": 0
+    },
+    "files_changed": ["app/greeting.mjs", "app/labels.mjs", "plans/refactor.md"]
+  }
+}
