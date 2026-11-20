@@ -20,7 +20,6 @@ runner/
   fixtures/<name>/        generic task workspaces copied per run
   calibration/*.json      known-good and known-bad judge examples
   self-test/              deterministic runner self-test
-  reports/                generated JSON output (gitignored)
 templates/fixture/        starting point for a fast or subagent fixture
 templates/fixture-delegation/  starting point for a delegated plan fixture
 agents/eval-judge.md      read-only global judge agent
@@ -35,6 +34,13 @@ guardrails/
   tests/harness-guard.test.mjs  deterministic guard self-test
   scripts/install.sh            guardrail symlinks and block sync
   scripts/doctor.mjs            guardrail readiness check
+
+Local state (outside the repo, never committed):
+$AGENT_EVALS_STATE/             default ~/.local/state/agent-evals
+  reports/                      run and calibration JSON
+  drafts/                       from-session captures
+  harness-guard.log             runtime guard decisions
+  backups/AGENTS.md.bak         managed block backup
 ```
 
 ## Install and local wiring
@@ -59,7 +65,8 @@ The installer creates six symlinks idempotently and syncs the managed
 ```
 
 Existing links to the same target are left alone. A real file, real directory,
-or different symlink is refused unless `--force` is passed.
+or different symlink is refused unless `--force` is passed. Both installers also
+create `reports/`, `drafts/`, and `backups/` under `$AGENT_EVALS_STATE`.
 
 Verify the machine:
 
@@ -103,8 +110,10 @@ pnpm doctor:guardrails   # node guardrails/scripts/doctor.mjs
 - `--dry-run` proves the runner and scorers work without invoking a model.
 - `--no-judge` keeps hard checks only.
 
-Reports are written under `runner/reports/` by default and are gitignored.
-Start comparisons at `docs/baseline.md`; keep the raw JSON for each run.
+Reports are written under `$AGENT_EVALS_STATE/reports/` by default
+(`~/.local/state/agent-evals/reports`) and are never committed. `--report <path>`
+still overrides the destination. Start comparisons at `docs/baseline.md`; keep
+the raw JSON for each run.
 
 ## Case, fixture, calibration
 
@@ -134,23 +143,23 @@ Capture a read-only draft from the OpenCode database:
 
 ```bash
 node scripts/from-session.mjs --session ses_<id-or-title> --id my-case \
-  --trace runner/reports/my-case-trace.json
+  --trace ~/.local/state/agent-evals/reports/my-case-trace.json
 ```
 
 Scaffold a case and, optionally, a fixture from the captured draft:
 
 ```bash
-node scripts/new-case.mjs --from-draft runner/cases/drafts/my-case.json \
+node scripts/new-case.mjs --from-draft ~/.local/state/agent-evals/drafts/my-case.json \
   --fixture my-case --new-fixture
 ```
 
-- `--from-draft` carries the draft's id, prompt, agent, model, and
-  `source_session`; `--template` is inferred from the draft agent and can be
-  overridden.
-- For a manual case without a draft, add `--source-session ses_...` and
-  `--notes <text>`.
-- Drafts go to `runner/cases/drafts/` and are ignored by the runner.
-  Promotion to `runner/cases/<id>.json` is manual.
+- `--from-draft` carries the draft's id, prompt, agent, and model; `--template`
+  is inferred from the draft agent and can be overridden. `source_session` and
+  draft notes stay in the draft.
+- `--source-session ses_...` and `--notes <text>` are draft-only provenance for
+  a manual capture that was not created by `from-session`.
+- Drafts go to `$AGENT_EVALS_STATE/drafts/` and are never committed. Promotion
+  to `runner/cases/<id>.json` is manual.
 - `--template` is `fast`, `subagent`, or `delegation`. Presets choose the shape,
   not the exact invariant; replace them before running.
 - `--new-fixture` copies `templates/fixture/` or
@@ -166,10 +175,10 @@ node scripts/new-case.mjs --from-draft runner/cases/drafts/my-case.json \
   calibration files, or reports.
 - No dependency on the repository that invoked the suite. `AGENT_EVALS_HOME`
   may point at another runner directory; the default is `<repo>/runner`.
-- Reports are generated output: gitignored, safe to delete, never source.
+- Reports are local state: `$AGENT_EVALS_STATE/reports`, never source.
 - `scripts/validate.mjs` enforces the static contract: case schema, fixture
-  references, calibration coverage, judge permissions, required docs, and
-  forbidden project paths.
+  references, calibration coverage, judge permissions, required docs, forbidden
+  project paths, and no local provenance in runnable cases.
 
 ## Evals are not the runtime guard
 
