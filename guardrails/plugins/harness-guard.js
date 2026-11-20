@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 
 /**
  * Global harness guard.
@@ -13,7 +14,16 @@ import { isAbsolute, join, resolve } from "node:path";
  * be ticked directly. Child sessions are never gated, so a delegated executor
  * can edit normally.
  *
- * This is a constraint, not advice. Prose cannot enforce either invariant.
+ * Protected branches: a git write (commit, push, merge) is refused while the
+ * current branch is main or master, in every session including child sessions.
+ * A push that names main or master as its refspec is refused from any branch.
+ * A write also requires a conforming branch name:
+ *   <repo>/<type>-<short-description>
+ * where <type> is feat, fix, chore, docs, test, refactor, perf, ci, build, or
+ * style. Creating a branch with git switch -c or git checkout -b is allowed
+ * only when the new name matches. Read-only git commands are unaffected.
+ *
+ * This is a constraint, not advice. Prose cannot enforce any invariant.
  *
  * Modes: HARNESS_GUARD=enforce (default), log, off.
  * Fast budget: HARNESS_GUARD_FAST_MAX (default 4).
@@ -23,8 +33,25 @@ const STATE_ROOT = resolve(
   process.env.AGENT_EVALS_STATE || join(homedir(), ".local", "state", "agent-evals"),
 );
 const LOG_PATH = join(STATE_ROOT, "harness-guard.log");
-const MODE = (process.env.HARNESS_GUARD || "enforce").toLowerCase();
 const FAST_MAX = Number.parseInt(process.env.HARNESS_GUARD_FAST_MAX || "4", 10);
+const PROTECTED_BRANCHES = new Set(["main", "master"]);
+const BRANCH_TYPES = [
+  "feat",
+  "fix",
+  "chore",
+  "docs",
+  "test",
+  "refactor",
+  "perf",
+  "ci",
+  "build",
+  "style",
+];
+const GIT_WRITE_RE =
+  /^\s*(?:\(\s*)?(?:(?:[A-Za-z_]\w*=\S*)\s+)*(?:command\s+|exec\s+)?git(?:\s+(?:-C\s+(?:\S+|"[^"]*"|'[^']*')|-c\s+(?:\S+|"[^"]*"|'[^']*')|--?[\w-]+(?:=\S+)?))*\s+(commit|push|merge)\b/;
+const GIT_CREATE_RE =
+  /^\s*(?:\(\s*)?(?:(?:[A-Za-z_]\w*=\S*)\s+)*(?:command\s+|exec\s+)?git(?:\s+(?:-C\s+(?:\S+|"[^"]*"|'[^']*')|-c\s+(?:\S+|"[^"]*"|'[^']*')|--?[\w-]+(?:=\S+)?))*\s+(?:switch|checkout)\s+(?:-[\w-]+\s+)*(?:-c|-C|-b|-B|--create|--force-create|--branch)\s+(\S+)/;
+const COMMAND_TOOLS = new Set(["shell", "bash"]);
 
 const FILE_RE =
   /(?:^|[\s`"'(])((?:[\w.-]+\/)*[\w.-]+\.(?:php|css|scss|js|mjs|cjs|ts|tsx|jsx|md|json|html|vue|svelte))(?=$|[\s`"'),:])/i;
@@ -59,6 +86,10 @@ const MUTATING_SHELL_RE =
 let baseDir = process.cwd();
 const sessions = new Map();
 
+function currentMode() {
+  return (process.env.HARNESS_GUARD || "enforce").toLowerCase();
+}
+
 function log(line) {
   try {
     mkdirSync(STATE_ROOT, { recursive: true });
@@ -79,6 +110,144 @@ function normalizePath(path) {
 function absolutePath(path) {
   const value = normalizePath(path);
   return isAbsolute(value) ? value : resolve(baseDir, value);
+}
+
+function commandSegments(command) {
+  return String(command || "").split(/\r?\n|;|&&|\|\||\|/);
+}
+
+function shellWords(text) {
+  const words = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    words.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return words;
+}
+
+function protectedRefspec(refspec) {
+  const value = String(refspec || "").replace(/^\+/, "");
+  const destination = value.includes(":") ? value.split(":").pop() : value;
+  const name = destination.replace(/^refs\/heads\//, "");
+  return PROTECTED_BRANCHES.has(name) ? name : null;
+}
+
+function pushTargetsProtected(tail) {
+  const words = shellWords(tail);
+  if (words.includes("--all") || words.includes("--mirror")) {
+    return "all branches, including protected ones";
+  }
+  const positionals = words.filter((word) => !word.startsWith("-"));
+  // The first positional is the remote; every later one is a refspec.
+  for (const refspec of positionals.slice(1)) {
+    const branch = protectedRefspec(refspec);
+    if (branch) return `protected branch "${branch}"`;
+  }
+  return null;
+}
+
+function gitOutput(repoDir, args) {
+  try {
+    return execFileSync("git", ["-C", repoDir, ...args], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function currentBranch(repoDir) {
+  for (const args of [
+    ["branch", "--show-current"],
+    ["rev-parse", "--abbrev-ref", "HEAD"],
+  ]) {
+    const branch = gitOutput(repoDir, args);
+    if (branch && branch !== "HEAD") return branch;
+  }
+  return null;
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Repository name used as the branch prefix. The common git dir keeps this
+ * correct inside a worktree, where the checkout directory has another name.
+ */
+function repoName(repoDir) {
+  for (const args of [
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    ["rev-parse", "--show-toplevel"],
+  ]) {
+    const location = gitOutput(repoDir, args);
+    if (!location) continue;
+    const name = basename(location.replace(/[\\/]\.git$/, "").replace(/\.git$/, ""));
+    if (name) return name;
+  }
+  return basename(resolve(repoDir));
+}
+
+function branchConvention(repoDir) {
+  const repo = repoName(repoDir);
+  return {
+    pattern: new RegExp(
+      `^${escapeRegExp(repo)}/(?:${BRANCH_TYPES.join("|")})-[a-z0-9][a-z0-9-]*$`,
+    ),
+    description: `${repo}/<type>-<short-description>`,
+    types: BRANCH_TYPES.join(", "),
+  };
+}
+
+function repoDirFor(args = {}) {
+  const value = args.cwd || args.workdir;
+  return value ? absolutePath(value) : baseDir;
+}
+
+function shellCommand(tool, args = {}) {
+  if (!COMMAND_TOOLS.has(tool)) return "";
+  return String(args.command || args.cmd || "");
+}
+
+function conventionReason(name, convention) {
+  return `branch "${name}" does not match ${convention.description} (allowed types: ${convention.types}). Switch to a conforming branch before writing to git.`;
+}
+
+/**
+ * Returns a denial reason for a git write on a protected branch or a branch
+ * that breaks the naming convention, and for creation of a non-conforming
+ * branch. An unknown branch (not a repo, detached HEAD) is not blocked.
+ */
+function gitBranchViolation(command, repoDir) {
+  const convention = branchConvention(repoDir);
+  for (const segment of commandSegments(command)) {
+    const create = segment.match(GIT_CREATE_RE);
+    if (create) {
+      const name = create[1].replace(/^["']|["']$/g, "");
+      if (!convention.pattern.test(name)) return conventionReason(name, convention);
+      continue;
+    }
+
+    const match = segment.match(GIT_WRITE_RE);
+    if (!match) continue;
+    const verb = match[1].toLowerCase();
+    if (verb === "push") {
+      const target = pushTargetsProtected(segment.slice(match.index + match[0].length));
+      if (target) {
+        return `git push targets ${target}. Push a feature branch or open a pull request.`;
+      }
+    }
+    const branch = currentBranch(repoDir);
+    if (!branch) continue;
+    if (PROTECTED_BRANCHES.has(branch)) {
+      return `protected branch "${branch}": git ${verb} is blocked. Switch to a feature branch before writing to git.`;
+    }
+    if (!convention.pattern.test(branch)) return conventionReason(branch, convention);
+  }
+  return null;
 }
 
 export function extractPlanPath(text) {
@@ -203,7 +372,7 @@ function resetSession(sessionID, text, isChild = false) {
     delegatedPhases: new Set(),
   });
   log(
-    `start session=${sessionID} fast=${fast} plan=${plan} child=${isChild} phase=${plan ? firstIncomplete(phases) + 1 : 0} mode=${MODE} chars=${String(text || "").length}`,
+    `start session=${sessionID} fast=${fast} plan=${plan} child=${isChild} phase=${plan ? firstIncomplete(phases) + 1 : 0} mode=${currentMode()} chars=${String(text || "").length}`,
   );
 }
 
@@ -235,7 +404,7 @@ export function isDirectMutation(tool, args = {}) {
 
 function deny(sessionID, reason) {
   const message = `HarnessGuard: ${reason}`;
-  if (MODE === "log") {
+  if (currentMode() === "log") {
     log(`would_block session=${sessionID} ${reason}`);
     return;
   }
@@ -256,7 +425,7 @@ function explicitPhase(args = {}) {
  * Kept separate from the hook so it is testable without OpenCode.
  */
 export function shouldBlock(sessionID, tool, args = {}) {
-  if (MODE === "off") return false;
+  if (currentMode() === "off") return false;
   const state = sessionFor(sessionID);
 
   if (DELEGATION_TOOLS.has(tool)) {
@@ -278,6 +447,15 @@ export function shouldBlock(sessionID, tool, args = {}) {
     return false;
   }
 
+  const command = shellCommand(tool, args);
+  if (command) {
+    const violation = gitBranchViolation(command, repoDirFor(args));
+    if (violation) {
+      deny(sessionID, violation);
+      return currentMode() !== "log";
+    }
+  }
+
   if (state.plan) {
     refreshPlan(state);
     if (isDirectMutation(tool, args) && !isPlanFile(args)) {
@@ -287,7 +465,7 @@ export function shouldBlock(sessionID, tool, args = {}) {
           sessionID,
           `plan phase ${phase + 1} is not delegated. Call the subagent tool for this phase before editing files.`,
         );
-        return MODE !== "log";
+        return currentMode() !== "log";
       }
     }
   }
@@ -308,7 +486,7 @@ export function shouldBlock(sessionID, tool, args = {}) {
           sessionID,
           `fast-change budget exhausted after ${FAST_MAX} lookups. Make the edit now or ask one concrete question.`,
         );
-        return MODE !== "log";
+        return currentMode() !== "log";
       }
     }
   }
@@ -328,7 +506,7 @@ function partsText(parts = []) {
  */
 export async function setup(ctx) {
   baseDir = ctx.location?.directory || process.cwd();
-  log(`loaded mode=${MODE} fastMax=${FAST_MAX} dir=${baseDir}`);
+  log(`loaded mode=${currentMode()} fastMax=${FAST_MAX} dir=${baseDir}`);
 
   await ctx.session.hook("prompt", async (event) => {
     const text = event?.prompt?.text;
@@ -355,7 +533,7 @@ export async function setup(ctx) {
  * V1 compatibility entry point. V1 loads the named export and calls it.
  */
 export async function HarnessGuard() {
-  log(`loaded-v1 mode=${MODE} fastMax=${FAST_MAX}`);
+  log(`loaded-v1 mode=${currentMode()} fastMax=${FAST_MAX}`);
   return {
     "chat.message": async (input, output) => {
       const text = partsText(output?.parts || []);
