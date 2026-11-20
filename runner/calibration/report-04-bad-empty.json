@@ -1,0 +1,25 @@
+{
+  "id": "report-04-bad-empty",
+  "scorer": "report_quality",
+  "label": "bad",
+  "threshold": 0.6,
+  "notes": "No final report at all. The workspace did change and the check passed, but the agent produced no evidence or status.",
+  "input": {
+    "case": {
+      "id": "calibration-e4-empty-report",
+      "agent": "general",
+      "task": "Fix src/slug.mjs and report the exact command and output."
+    },
+    "report": "",
+    "files_changed": ["src/slug.mjs"],
+    "checks": [
+      {
+        "command": "node --test test/slug.test.mjs",
+        "exit_code": 0,
+        "passed": true,
+        "stdout": "✔ slugifies a basic string\nℹ tests 4\nℹ pass 4\nℹ fail 0\n",
+        "stderr": ""
+      }
+    ]
+  }
+}
