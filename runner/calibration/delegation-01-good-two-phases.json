@@ -1,0 +1,93 @@
+{
+  "id": "delegation-01-good-two-phases",
+  "scorer": "delegation_quality",
+  "label": "good",
+  "threshold": 0.6,
+  "notes": "Two phases delegated separately, complete prompts, final gate delegated, parent made no code edits or shell calls.",
+  "input": {
+    "case": {
+      "id": "calibration-e1-two-phase",
+      "agent": "plan-orchestrator",
+      "task": "Execute plans/refactor.md. Work through both phases in order; delegate every code change and shell command."
+    },
+    "plan": {
+      "path": "plans/refactor.md",
+      "phase_headings": [
+        "## Phase 1: Greeting formatting",
+        "## Phase 2: Label formatting"
+      ],
+      "content": "# Refactor\n\n## Phase 1: Greeting formatting\n\n- [ ] Implement `formatGreeting(name)` in `app/greeting.mjs` so `node --test test/greeting.test.mjs` passes.\n- [ ] Run `node --test test/greeting.test.mjs` and report its result.\n\n## Phase 2: Label formatting\n\n- [ ] Implement `formatLabel(key)` in `app/labels.mjs` so `node --test test/labels.test.mjs` passes.\n- [ ] Run `node --test test/labels.test.mjs` and report its result.\n\n**Gate:** `node test.mjs` exits 0 after both phases.",
+      "error": null
+    },
+    "parent": {
+      "agent": "plan-orchestrator",
+      "code_edit_calls": 0,
+      "shell_calls": 0,
+      "subagent_calls": [
+        {
+          "agent": "general",
+          "description": "Phase 1 greeting formatting",
+          "prompt": "You are executing ONE phase of a markdown plan.\nPlan file: `plans/refactor.md`\nExact phase heading: `## Phase 1: Greeting formatting`\n\nTasks:\n- Implement `formatGreeting(name)` in `app/greeting.mjs`.\n- Run `node --test test/greeting.test.mjs` and report the result.\n\nAcceptance criteria:\n- `node --test test/greeting.test.mjs` exits 0 with all tests passing.\n\nScope:\n- Edit only `app/greeting.mjs`. You may read `test/greeting.test.mjs` and the plan.\n\nDo not touch:\n- `app/labels.mjs`, `test/labels.test.mjs`, `test.mjs`, or the plan file.\n\nChecks:\n- Run `node --test test/greeting.test.mjs`; expected output includes `# pass` and exit code 0.\n\nReport back: status, files changed, checks with the exact command and actual output, blockers (or none)."
+        },
+        {
+          "agent": "general",
+          "description": "Phase 2 label formatting",
+          "prompt": "You are executing ONE phase of a markdown plan.\nPlan file: `plans/refactor.md`\nExact phase heading: `## Phase 2: Label formatting`\n\nTasks:\n- Implement `formatLabel(key)` in `app/labels.mjs`.\n- Run `node --test test/labels.test.mjs` and report the result.\n\nAcceptance criteria:\n- `node --test test/labels.test.mjs` exits 0 with all tests passing.\n\nScope:\n- Edit only `app/labels.mjs`. You may read `test/labels.test.mjs` and the plan.\n\nDo not touch:\n- `app/greeting.mjs`, `test/greeting.test.mjs`, `test.mjs`, or the plan file.\n\nChecks:\n- Run `node --test test/labels.test.mjs`; expected output includes `# pass` and exit code 0.\n\nReport back: status, files changed, checks with the exact command and actual output, blockers (or none)."
+        },
+        {
+          "agent": "general",
+          "description": "Run final plan gate",
+          "prompt": "You are running the FINAL GATE of `plans/refactor.md`.\nBoth phases are complete and verified individually.\n\nGate: run `node test.mjs` from the project root. Expected: exit code 0, all tests pass.\n\nDo not edit any file. Report status, the exact command, actual output, and blockers (or none)."
+        }
+      ],
+      "other_tool_calls": [
+        { "name": "read", "target": "plans/refactor.md", "exit_code": null },
+        { "name": "edit", "target": "plans/refactor.md", "exit_code": null },
+        { "name": "edit", "target": "plans/refactor.md", "exit_code": null }
+      ],
+      "final_report": "Both phases were delegated, verified, and their checkboxes ticked. The final gate was delegated and passed. No code was edited by the orchestrator."
+    },
+    "children": [
+      {
+        "agent": "general",
+        "title": "Phase 1 greeting formatting",
+        "prompt": "You are executing ONE phase of a markdown plan.\nPlan file: `plans/refactor.md`\nExact phase heading: `## Phase 1: Greeting formatting`\n\nTasks:\n- Implement `formatGreeting(name)` in `app/greeting.mjs`.\n- Run `node --test test/greeting.test.mjs` and report the result.\n\nAcceptance criteria:\n- `node --test test/greeting.test.mjs` exits 0 with all tests passing.\n\nScope:\n- Edit only `app/greeting.mjs`.\n\nDo not touch:\n- `app/labels.mjs`, `test/labels.test.mjs`, `test.mjs`, or the plan file.\n\nChecks:\n- Run `node --test test/greeting.test.mjs`; expected output includes `# pass` and exit code 0.",
+        "final_report": "Status: SUCCESS\nFiles changed: app/greeting.mjs\nCheck: node --test test/greeting.test.mjs (exit 0)\nOutput: # pass 3, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "read", "target": "app/greeting.mjs", "exit_code": null },
+          { "name": "read", "target": "test/greeting.test.mjs", "exit_code": null },
+          { "name": "edit", "target": "app/greeting.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/greeting.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Phase 2 label formatting",
+        "prompt": "You are executing ONE phase of a markdown plan.\nPlan file: `plans/refactor.md`\nExact phase heading: `## Phase 2: Label formatting`\n\nTasks:\n- Implement `formatLabel(key)` in `app/labels.mjs`.\n- Run `node --test test/labels.test.mjs` and report the result.\n\nAcceptance criteria:\n- `node --test test/labels.test.mjs` exits 0 with all tests passing.\n\nScope:\n- Edit only `app/labels.mjs`.\n\nDo not touch:\n- `app/greeting.mjs`, `test/greeting.test.mjs`, `test.mjs`, or the plan file.\n\nChecks:\n- Run `node --test test/labels.test.mjs`; expected output includes `# pass` and exit code 0.",
+        "final_report": "Status: SUCCESS\nFiles changed: app/labels.mjs\nCheck: node --test test/labels.test.mjs (exit 0)\nOutput: # pass 3, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "read", "target": "app/labels.mjs", "exit_code": null },
+          { "name": "edit", "target": "app/labels.mjs", "exit_code": null },
+          { "name": "shell", "target": "node --test test/labels.test.mjs", "exit_code": 0 }
+        ]
+      },
+      {
+        "agent": "general",
+        "title": "Run final plan gate",
+        "prompt": "You are running the FINAL GATE of `plans/refactor.md`.\nGate: run `node test.mjs` from the project root. Expected: exit code 0, all tests pass.\nDo not edit any file. Report status, the exact command, actual output, and blockers.",
+        "final_report": "Status: PASS\nCommand: node test.mjs (exit 0)\nOutput: # tests 8, # pass 8, # fail 0\nBlockers: none",
+        "tool_calls": [
+          { "name": "shell", "target": "node test.mjs", "exit_code": 0 }
+        ]
+      }
+    ],
+    "final_gate": {
+      "required": "node test.mjs",
+      "delegated": true,
+      "passed": true,
+      "command": "node test.mjs",
+      "exit_code": 0
+    },
+    "files_changed": ["app/greeting.mjs", "app/labels.mjs", "plans/refactor.md"]
+  }
+}
