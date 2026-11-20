@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,10 @@ import plugin, {
   parsePlan,
   shouldBlock,
 } from "../plugins/harness-guard.js";
+
+// Enforcement is what these tests assert; pin it regardless of the caller.
+const originalMode = process.env.HARNESS_GUARD;
+process.env.HARNESS_GUARD = "enforce";
 
 const hooks = {};
 const parentIDs = new Map();
@@ -130,6 +135,75 @@ await before("flat", "edit", { filePath: "app/Flat.php" });
 await prompt("normal", "fix the typo in README.md");
 await before("normal", "edit", { filePath: "README.md" });
 assert.equal(shouldBlock("unknown", "read", {}), false);
+
+// Protected branches and the <repo>/<type>-<short-description> convention.
+// The temporary repo is named after the real one so the convention is the
+// same string a developer sees here.
+const branchRoot = mkdtempSync(join(tmpdir(), "harness-guard-branches-"));
+const branchRepo = join(branchRoot, "agent-evals");
+mkdirSync(branchRepo);
+execFileSync("git", ["init", "-q", "-b", "main"], { cwd: branchRepo, stdio: "ignore" });
+await plugin.setup({ ...ctx, location: { directory: branchRepo } });
+const git = (...args) =>
+  execFileSync("git", ["-C", branchRepo, ...args], { stdio: "ignore" });
+
+try {
+  await assert.rejects(
+    async () => before("branch", "shell", { command: "git commit -m test" }),
+    /protected branch "main"/,
+  );
+  await assert.rejects(
+    async () =>
+      before("branch", "shell", { command: "git push origin agent-evals/feat-x" }),
+    /protected branch "main"/,
+  );
+  await assert.rejects(
+    async () => before("branch", "shell", { command: "git merge other" }),
+    /protected branch "main"/,
+  );
+
+  // Read-only git commands are allowed on a protected branch.
+  await before("branch", "shell", { command: "git status --short" });
+
+  // Log mode records the decision but does not block.
+  process.env.HARNESS_GUARD = "log";
+  await before("branch", "shell", { command: "git commit -m test" });
+  process.env.HARNESS_GUARD = "enforce";
+
+  // Branch creation must follow the convention.
+  await assert.rejects(
+    async () => before("branch", "shell", { command: "git switch -c feature/invalid-name" }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
+  await before("branch", "shell", {
+    command: "git switch -c agent-evals/feat-valid-branch",
+  });
+  git("checkout", "-q", "-b", "agent-evals/feat-valid-branch");
+
+  // A conforming feature branch may commit and push its own branch.
+  await before("branch", "shell", { command: "git commit -m test" });
+  await before("branch", "shell", {
+    command: "git push origin agent-evals/feat-valid-branch",
+  });
+
+  // A push that names a protected branch is blocked from a feature branch.
+  await assert.rejects(
+    async () => before("branch", "shell", { command: "git push origin main" }),
+    /targets protected branch "main"/,
+  );
+
+  // A branch that exists but breaks the convention cannot commit.
+  git("checkout", "-q", "-b", "feature/invalid-name");
+  await assert.rejects(
+    async () => before("branch", "shell", { command: "git commit -m test" }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
+} finally {
+  rmSync(branchRoot, { recursive: true, force: true });
+}
+
+if (originalMode === undefined) delete process.env.HARNESS_GUARD;
+else process.env.HARNESS_GUARD = originalMode;
 
 rmSync(root, { recursive: true, force: true });
 console.log("harness-guard: PASS");
