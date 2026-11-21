@@ -127,13 +127,26 @@ AEO remains valid, and the agent falls back to it when no AEO result answers.
 
 The template is assembled by the `final_answer` tool, not by the model:
 
-- `solution` is required; `code` and `language` are optional.
+- `solution` is required and capped at 400 characters; long-form detail belongs
+  in `explanation`, which is inserted between the solution and the sources.
 - `sources` must be in the turn's verified URL set, populated only by
   `fast_search` and `fast_fetch` results. An invented URL throws a `Tool.Error`.
 - `unverified: true` emits `None — retrieval failed` and the unverified notice.
   It conflicts with provided sources.
 - The tool returns the canonical markdown; the agent is instructed to reply
   with exactly that content.
+
+Explanation requests are detected from the user prompt and use a separate
+readability contract instead of the Q&A template:
+
+- short paragraphs of one to three sentences;
+- descriptive headings or bullet lists;
+- an explicit good-vs-bad contrast;
+- no paragraph longer than about 700 characters.
+
+An explanation is not required to carry `**Solution:**`. If it is a dense wall,
+the audit asks for a rewrite with `repairExplanationPrompt`, not
+`final_answer`.
 
 If the model bypasses the tool or writes a malformed final message, a
 turn-completion audit (`session.execution.succeeded`) runs:
