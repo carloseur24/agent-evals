@@ -37,6 +37,12 @@ const STOPWORDS = new Set([
 
 const PLACEHOLDERS = /\b(?:yyyy|yy|mm|dd|hh|ss)(?:[-_/](?:yyyy|yy|mm|dd|hh|ss))+\b|\b(?:yyyy|yy|mm|dd|hh|ss)\b/gi;
 
+const EXPLANATION_RE = /\b(?:explain|explanation|teach|help me understand|walk me through|feynman|why|how does|what is the difference|compare|trade-?offs?)\b/i;
+
+export function isExplanationPrompt(text) {
+  return EXPLANATION_RE.test(String(text || ''));
+}
+
 const OFFICIAL_HOSTS = new Set([
   'developer.mozilla.org',
   'docs.python.org',
@@ -366,8 +372,12 @@ export function formatAnswer(input, verifiedUrls = new Set()) {
   const allowed = verifiedUrls instanceof Set ? verifiedUrls : new Set(verifiedUrls);
   const solution = cleanText(input?.solution);
   if (!solution) issues.push('solution is required');
+  if (solution.length > 400) {
+    issues.push('solution is too long; put the detail in explanation');
+  }
 
   const unverified = input?.unverified === true;
+  const explanation = input?.explanation ? String(input.explanation).trim() : '';
   const code = input?.code ? stripFence(input.code) : '';
   const language = normalizeLanguage(input?.language);
   const sources = [];
@@ -393,6 +403,7 @@ export function formatAnswer(input, verifiedUrls = new Set()) {
   if (issues.length > 0) return { ok: false, issues, text: '' };
 
   const lines = [`**Solution:** ${solution}`];
+  if (explanation) lines.push('', explanation);
   if (code) lines.push('', `\`\`\`${language}`, code, '```');
   lines.push('', '**Sources:**');
   if (unverified) {
@@ -444,6 +455,38 @@ export function validateAnswer(text, verifiedUrls = []) {
   return { ok: issues.length === 0, issues };
 }
 
+/**
+ * Readability contract for explanation requests. It deliberately does not
+ * require the Q&A template; it checks that the explanation is structured and
+ * scannable instead of a single dense paragraph.
+ */
+export function validateExplanation(text) {
+  const issues = [];
+  const value = String(text || '').trim();
+  if (!value) return { ok: false, issues: ['empty explanation'] };
+
+  const withoutCode = value.replace(/```[\s\S]*?```/g, ' ');
+  const blocks = withoutCode
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  for (const block of blocks) {
+    if (block.length <= 700) continue;
+    if (/^\s*(?:[-*]|\d+\.)\s+\S/m.test(block)) continue;
+    issues.push('paragraph too long; split it into short paragraphs');
+    break;
+  }
+
+  const hasHeading = /^#{1,6}\s+\S/m.test(value) || /^\*\*[^*\n]+\*\*\s*$/m.test(value);
+  const hasList = /^\s*(?:[-*]|\d+\.)\s+\S/m.test(value);
+  if (!hasHeading && !hasList) issues.push('add descriptive headings or bullet lists');
+  if (!/\b(?:good|bad|wrong|right|better|worse)\b|✅|❌/i.test(value)) {
+    issues.push('add an explicit good-vs-bad contrast');
+  }
+
+  return { ok: issues.length === 0, issues };
+}
+
 function repairPrompt(issues, verifiedUrls) {
   const allowed = verifiedUrls.length
     ? verifiedUrls.map((url) => `- ${url}`).join('\n')
@@ -460,6 +503,21 @@ function repairPrompt(issues, verifiedUrls) {
     allowed,
     '- `unverified: true` only when no verified source supports the answer.',
     'Then reply with exactly the formatted content and nothing else.',
+  ].join('\n');
+}
+
+function repairExplanationPrompt(issues) {
+  return [
+    'Your explanation is too dense to read:',
+    ...issues.map((issue) => `- ${issue}`),
+    '',
+    'Rewrite it with:',
+    '- short paragraphs of 1-3 sentences;',
+    '- descriptive headings;',
+    '- bullet lists for comparisons;',
+    '- separate Good and Bad sections;',
+    '- no paragraph longer than about 700 characters.',
+    'Keep the content. This is an explanation, not a Q&A answer; do not call final_answer.',
   ].join('\n');
 }
 
@@ -868,6 +926,17 @@ function lastAssistantText(messages) {
   return '';
 }
 
+function lastUserText(messages) {
+  const list = Array.isArray(messages) ? messages : messages?.data || [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    if (message?.type !== 'user') continue;
+    const text = messageText(message);
+    if (text) return text;
+  }
+  return '';
+}
+
 function isEscalationStatus(text) {
   return (
     !text.includes('**Solution:**') &&
@@ -929,6 +998,7 @@ async function auditIdle(ctx, sessionID) {
   }
 
   const text = lastAssistantText(messages);
+  const explanationMode = isExplanationPrompt(lastUserText(messages));
   const [verifiedRaw, finalAnswer, attemptsRaw] = await Promise.all([
     ctx.storage.get(`verified/${sessionID}`).catch(() => []),
     ctx.storage.get(`finalAnswer/${sessionID}`).catch(() => undefined),
@@ -949,6 +1019,28 @@ async function auditIdle(ctx, sessionID) {
 
   if (isEscalationStatus(text)) return;
   if (!text.includes('**Solution:**') && /\?\s*$/.test(text)) return;
+
+  if (explanationMode) {
+    const explanation = validateExplanation(text);
+    if (explanation.ok) {
+      try {
+        await ctx.storage.remove(`repairAttempts/${sessionID}`);
+      } catch {
+        // The next prompt clears it.
+      }
+      return;
+    }
+    if (attempts > 0) {
+      try {
+        await ctx.storage.remove(`repairAttempts/${sessionID}`);
+      } catch {
+        // The next prompt clears it.
+      }
+      return;
+    }
+    await requestRepair(ctx, sessionID, repairExplanationPrompt(explanation.issues));
+    return;
+  }
 
   const validation = validateAnswer(text, verified);
   if (validation.ok) {
@@ -1195,13 +1287,18 @@ export default {
       editor.add({
         name: 'final_answer',
         description:
-          'Format and validate the final answer. Rejects source URLs that this turn did not retrieve and always emits the canonical template.',
+          'Format and validate the final answer. Keep solution to 1-2 sentences; put long-form explanation in explanation. Rejects source URLs this turn did not retrieve.',
         input: {
           type: 'object',
           properties: {
             solution: {
               type: 'string',
-              description: 'Direct answer in 1-2 sentences.',
+              description: 'Direct answer in 1-2 sentences (max 400 characters).',
+            },
+            explanation: {
+              type: 'string',
+              description:
+                'Optional long-form explanation with headings, short paragraphs, and a good-vs-bad contrast.',
             },
             code: {
               type: 'string',
