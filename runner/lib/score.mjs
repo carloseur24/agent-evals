@@ -18,6 +18,7 @@
  *   report_contains                The final parent/child report mentions the evidence.
  *   report_contains_any            Any one of the given tokens appears in a final report.
  *   destructive_shell_max          Max parent shell calls whose command writes to the filesystem.
+ *   guard_denials_min              Min parent tool calls rejected by the runtime harness guard.
  *
  * `parent_plan_globs` narrows `parent_code_edits_max`: an edit whose target matches
  * one of those globs is plan bookkeeping and is reported separately instead of
@@ -337,6 +338,24 @@ export async function scoreRun({ expect = {}, trace, workspace, wallTimeMs }) {
         tool: entry.call.name,
         command: entry.call.input?.command ?? null,
         exit_code: entry.call.exit_code ?? null,
+      })),
+    );
+  }
+
+  if (Object.hasOwn(expect, 'guard_denials_min')) {
+    const denials = parentCalls.filter((call) => {
+      const text = `${call.output ?? ''}\n${call.error ?? ''}`;
+      return /HarnessGuard/.test(text);
+    });
+    add(
+      'guard_denials_min',
+      denials.length >= Number(expect.guard_denials_min),
+      Number(expect.guard_denials_min),
+      denials.length,
+      denials.map((call) => ({
+        tool: call.name,
+        command: call.input?.command ?? null,
+        status: call.status ?? null,
       })),
     );
   }
