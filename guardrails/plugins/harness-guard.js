@@ -18,10 +18,12 @@ import { basename, isAbsolute, join, resolve } from "node:path";
  * current branch is main or master, in every session including child sessions.
  * A push that names main or master as its refspec is refused from any branch.
  * A write also requires a conforming branch name:
- *   <repo>/<type>-<short-description>
+ *   <repo-folder>/<type>-<short-description>
  * where <type> is feat, fix, chore, docs, test, refactor, perf, ci, build, or
- * style. Creating a branch with git switch -c or git checkout -b is allowed
- * only when the new name matches. Read-only git commands are unaffected.
+ * style. The prefix is the repository folder name (resolved from the common git
+ * dir), so renaming the checkout changes it automatically. Creating a branch
+ * with git switch -c or git checkout -b is allowed only when the new name
+ * matches. Read-only git commands are unaffected.
  *
  * Shell wrappers are unwrapped before the git check: `bash -c "git commit"`,
  * `sh -c`, `env git commit`, `sudo git ...`, and `... | xargs git commit` are
@@ -125,9 +127,9 @@ function normalizePath(path) {
   return value;
 }
 
-function absolutePath(path) {
+function absolutePath(path, cwd = baseDir) {
   const value = normalizePath(path);
-  return isAbsolute(value) ? value : resolve(baseDir, value);
+  return isAbsolute(value) ? value : resolve(cwd, value);
 }
 
 function commandSegments(command) {
@@ -295,15 +297,13 @@ function branchConvention(repoDir) {
 }
 
 function repoDirFor(args = {}) {
-  const value = args.cwd || args.workdir;
-  if (value) return absolutePath(value);
-
+  const workdir = args.cwd || args.workdir;
   const command = shellCommand("shell", args);
   const gitDir = gitDirFromCommand(command);
-  if (gitDir) return absolutePath(gitDir);
+  if (gitDir) return absolutePath(gitDir, workdir);
   const cdDir = cdDirFromCommand(command);
-  if (cdDir) return absolutePath(cdDir);
-
+  if (cdDir) return absolutePath(cdDir, workdir);
+  if (workdir) return absolutePath(workdir);
   return baseDir;
 }
 

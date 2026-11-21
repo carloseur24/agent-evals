@@ -22,10 +22,12 @@ runner/
   self-test/              deterministic runner self-test
 templates/fixture/        starting point for a fast or subagent fixture
 templates/fixture-delegation/  starting point for a delegated plan fixture
-agents/eval-judge.md      read-only global judge agent
+agents/*.md               global agents; one link is installed per file
+plugins/quick-agent/      fast_search/fast_fetch tools and runtime circuit breakers
 docs/baseline.md          model/agent/case baseline and recorded runs
 docs/plan.md              original build plan and phase record
 docs/factory.md           capture a real session into a case in ~30 minutes
+docs/quick-agent.md       quick-agent architecture and V2 mapping
 scripts/                  run, install, doctor, validate, from-session, new-case
 guardrails/
   plugins/harness-guard.js      fast-change budget and per-phase plan gate
@@ -52,17 +54,23 @@ needed.
 bash scripts/install.sh
 ```
 
-The installer creates six symlinks idempotently and syncs the managed
-`harness-invariants` block in `~/.config/opencode/AGENTS.md`:
+The installer is idempotent: it creates the fixed symlinks below, publishes one
+link per file in `agents/` and one per entry in `plugins/`, and syncs the
+managed `harness-invariants` block in `~/.config/opencode/AGENTS.md`:
 
 ```text
 ~/.config/opencode/agent-evals          -> <repo>
 ~/.config/opencode/evals                -> <repo>/runner
-~/.config/opencode/agents/eval-judge.md -> <repo>/agents/eval-judge.md
+~/.config/opencode/agents/<name>.md     -> <repo>/agents/<name>.md
+~/.config/opencode/plugins/<name>       -> <repo>/plugins/<name>
 ~/.config/opencode/plugins/harness-guard.js -> <repo>/guardrails/plugins/harness-guard.js
 ~/.config/opencode/agents/plan-orchestrator.md -> <repo>/guardrails/agents/plan-orchestrator.md
 ~/.config/opencode/agent-guardrails     -> <repo>/guardrails
 ```
+
+Adding a global agent or plugin is: add the file under `agents/` or `plugins/`,
+rerun `bash scripts/install.sh`, and restart OpenCode. The doctor verifies that
+every published agent is registered and every plugin entry is linked.
 
 Existing links to the same target are left alone. A real file, real directory,
 or different symlink is refused unless `--force` is passed. Both installers also
@@ -78,6 +86,54 @@ node guardrails/scripts/doctor.mjs
 The eval doctor exits 1 only when the runner cannot start or `eval-judge` is not
 registered; other problems are warnings. The guardrails doctor exits 1 on any
 hard mismatch in the runtime wiring.
+
+## Quick agent
+
+`agents/quick.md` is a primary agent for fast, source-cited answers to CLI,
+library, and documentation questions. It has no shell, edit, or raw web access.
+`agents/deep-research.md` is its isolated subagent for multi-source work.
+
+`plugins/quick-agent/` supplies both halves of the fast path:
+
+- `fast_search` checks a durable cache, then searches through a configured
+  provider. Provider order: `TAVILY_API_KEY`, `BRAVE_API_KEY`, `EXA_API_KEY`,
+  the OpenCode websearch integration, then `SEARXNG_URL`. When the OpenCode
+  integration returns an error, it retries once with
+  `QUICK_AGENT_SEARCH_PROVIDER` (default `parallel`). Each network call has a
+  4-second timeout.
+- Results are ranked AEO-first: official docs, documentation paths,
+  answer-first snippets, structured/code snippets, freshness, and title match
+  raise a result; forums and secondary tutorial sites lower it. Each result
+  carries `aeo` and `aeoScore`, and non-AEO results stay in provider order as
+  the fallback.
+- `fast_fetch` fetches one public URL, strips HTML, and caps the text at 4,000
+  characters. It returns an `aeo` audit (`score`, `signals`, `optimized`) from
+  the raw page: FAQ/HowTo schema, question headings, answer-first first
+  paragraph, meta description, code/lists, and freshness. Localhost, private
+  ranges, and non-http(s) URLs are refused.
+- `final_answer` is the only formatter for the output template. It rejects
+  source URLs that this turn did not retrieve, requires a verified source or
+  `unverified: true`, caps `solution` at 400 characters, and accepts an
+  `explanation` body for long-form detail.
+- Explanation requests are detected and validated for readability — short
+  paragraphs, headings or lists, and a good-vs-bad contrast — instead of being
+  forced into the Q&A template. A dense wall gets one rewrite request.
+- A turn-completion audit (`session.execution.succeeded`) validates the final
+  message and sends at most one repair prompt when the model bypassed
+  `final_answer` or broke the contract. Clarifying questions and explicit
+  `deep-research` escalation statuses are exempt.
+- The plugin also enforces the 18-second retrieval cutoff, query and URL
+  deduplication, and the two-failure source breaker. `quick` has `steps: 3`;
+  `deep-research` has `steps: 14`.
+
+No `opencode.json` change is needed. Use it with `opencode --agent quick` or by
+selecting `quick` in the TUI. Knobs:
+`QUICK_AGENT_BUDGET_MS`, `QUICK_AGENT_TOOL_TIMEOUT_MS`,
+`QUICK_AGENT_FETCH_MAX_CHARS`, `QUICK_AGENT_SEARCH_TTL_MS`,
+`QUICK_AGENT_CLI_TTL_MS`, `QUICK_AGENT_SEARCH_PROVIDER`,
+`QUICK_AGENT_AEO_MIN`, and `QUICK_AGENT_AEO_PAGE_MIN`.
+
+The plugin self-test is `pnpm quick:test`; the eval doctor runs it too.
 
 ## Run
 

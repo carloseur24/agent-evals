@@ -2,9 +2,10 @@
 /**
  * Machine readiness check for Agent Evals.
  *
- * Checks node, opencode, the OpenCode database, the runner, the eval-judge
- * agent, and plan-orchestrator. Exits 1 only when the runner cannot start or
- * the eval-judge agent is missing; every other problem is a warning.
+ * Checks node, opencode, the OpenCode database, the runner, the agents and
+ * plugins published from this repository, eval-judge, and plan-orchestrator.
+ * Exits 1 only when the runner cannot start or the eval-judge agent is missing;
+ * every other problem is a warning.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -208,6 +209,107 @@ if (!agents) {
   ok('plan-orchestrator', 'registered');
 } else {
   warn('plan-orchestrator', 'not registered (E1 delegation case needs it)');
+}
+
+// every agent published from agents/ must be registered
+const agentsDir = path.join(ROOT, 'agents');
+let agentFiles = [];
+try {
+  agentFiles = fs
+    .readdirSync(agentsDir)
+    .filter((file) => file.endsWith('.md') && !file.startsWith('.'))
+    .sort();
+} catch (error) {
+  warn('agents', `${agentsDir} not readable: ${error.code ?? error.message}`);
+}
+
+if (agentFiles.length > 0) {
+  const ids = agentFiles.map((file) => path.basename(file, '.md'));
+  if (!agents) {
+    warn('agents', `cannot verify: ${agentsResult.error}`);
+  } else {
+    const missing = ids.filter((id) => !findByID(agents, id));
+    if (missing.length === 0) {
+      ok('agents', `${ids.length} registered: ${ids.join(', ')}`);
+    } else {
+      warn('agents', `not registered: ${missing.join(', ')} (run scripts/install.sh)`);
+    }
+  }
+}
+
+// every plugin entry must be linked into the config directory
+const pluginsDir = path.join(ROOT, 'plugins');
+let pluginEntries = [];
+try {
+  pluginEntries = fs
+    .readdirSync(pluginsDir)
+    .filter((file) => !file.startsWith('.'))
+    .sort();
+} catch (error) {
+  warn('plugins', `${pluginsDir} not readable: ${error.code ?? error.message}`);
+}
+
+if (pluginEntries.length > 0) {
+  const missing = pluginEntries.filter((entry) => {
+    const link = path.join(CONFIG_HOME, 'plugins', entry);
+    try {
+      return fs.realpathSync(link) !== fs.realpathSync(path.join(pluginsDir, entry));
+    } catch {
+      return true;
+    }
+  });
+  if (missing.length === 0) {
+    ok('plugins', `${pluginEntries.length} linked: ${pluginEntries.join(', ')}`);
+  } else {
+    warn('plugins', `not linked: ${missing.join(', ')} (run scripts/install.sh)`);
+  }
+}
+
+const quickTest = path.join(ROOT, 'plugins', 'quick-agent', 'quick-agent.test.mjs');
+if (fs.existsSync(quickTest)) {
+  const selfTest = spawnSync(process.execPath, ['--test', quickTest], {
+    encoding: 'utf8',
+    timeout: 30000,
+  });
+  if (selfTest.status === 0) {
+    ok('quick-agent', 'self-test');
+  } else {
+    warn(
+      'quick-agent',
+      `self-test failed: ${firstLine(selfTest.stderr) || `exit ${selfTest.status}`}`,
+    );
+  }
+}
+
+const pluginList = spawnSync('opencode', ['api', 'get', '/api/plugin'], {
+  encoding: 'utf8',
+  timeout: 30000,
+  maxBuffer: 32 * 1024 * 1024,
+});
+if (pluginList.status === 0) {
+  try {
+    const payload = JSON.parse(pluginList.stdout);
+    const entries = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : [];
+    const active = entries.some(
+      (plugin) => plugin.id === 'quick-agent' && plugin.state?.status === 'active',
+    );
+    if (active) {
+      ok('quick plugin', 'active');
+    } else {
+      warn('quick plugin', 'not active (restart OpenCode)');
+    }
+  } catch (error) {
+    warn('quick plugin', `cannot parse /api/plugin: ${error.message}`);
+  }
+} else {
+  warn(
+    'quick plugin',
+    `cannot verify: ${firstLine(pluginList.stderr) || `exit ${pluginList.status}`}`,
+  );
 }
 
 if (hardFailure) {
