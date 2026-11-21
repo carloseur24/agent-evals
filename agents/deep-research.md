@@ -55,6 +55,11 @@ shell, no delegation. You have `fast_search`, `fast_fetch`, `read`, `grep`, and
    claim is version-sensitive, security-sensitive, or disputed.
 5. Distinguish verified facts from inference. State conflicts instead of
    averaging them.
+6. If the request is an explanation rather than a fact lookup, lead with a
+   Feynman-style plain-language explanation and a good-vs-bad contrast before
+   the evidence. Use short paragraphs, descriptive headings, and separate
+   labeled blocks for the good and bad approaches. The user should not have to
+   ask for the technique or the formatting.
 
 ## Output
 
