@@ -104,6 +104,18 @@ await before("plan", "edit", { filePath: planPath });
 await before("plan", "subagent", { agent: "general", description: "Phase 1" });
 await before("plan", "edit", { filePath: "app/Foo.php" });
 
+// A delegation that does not name the current phase unlocks nothing.
+await prompt("plan2", `execute ${planPath} now`);
+await before("plan2", "subagent", { agent: "general", description: "general cleanup" });
+await assert.rejects(
+  async () => {
+    await before("plan2", "edit", { filePath: "app/Unrelated.php" });
+  },
+  /phase 1 is not delegated/,
+);
+await before("plan2", "subagent", { agent: "general", description: "Phase 1 work" });
+await before("plan2", "edit", { filePath: "app/Unrelated.php" });
+
 writeFileSync(planPath, phaseOneOpen.replace("- [ ] add migration", "- [x] add migration"));
 await assert.rejects(
   async () => {
@@ -162,6 +174,21 @@ try {
     /protected branch "main"/,
   );
 
+  // Shell wrappers must not hide the git write.
+  for (const command of [
+    'bash -c "git commit -m test"',
+    "sh -c 'git merge other'",
+    "env git commit -m test",
+    "echo hi | xargs git commit -m test",
+    "command git commit -m test",
+  ]) {
+    await assert.rejects(
+      async () => before("branch", "shell", { command }),
+      /protected branch "main"/,
+      `wrapper was not unwrapped: ${command}`,
+    );
+  }
+
   // Read-only git commands are allowed on a protected branch.
   await before("branch", "shell", { command: "git status --short" });
 
@@ -196,6 +223,18 @@ try {
   git("checkout", "-q", "-b", "feature/invalid-name");
   await assert.rejects(
     async () => before("branch", "shell", { command: "git commit -m test" }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
+
+  // A command is judged against the repo it names, not the session directory.
+  await plugin.setup({ ...ctx, location: { directory: branchRoot } });
+  await assert.rejects(
+    async () => before("git-c", "shell", { command: `git -C ${branchRepo} commit -m test` }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
+  await assert.rejects(
+    async () =>
+      before("cd", "shell", { command: `cd ${branchRepo} && git commit -m test` }),
     /does not match agent-evals\/<type>-<short-description>/,
   );
 } finally {
