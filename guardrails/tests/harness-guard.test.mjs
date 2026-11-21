@@ -237,6 +237,25 @@ try {
       before("cd", "shell", { command: `cd ${branchRepo} && git commit -m test` }),
     /does not match agent-evals\/<type>-<short-description>/,
   );
+
+  // Regression: a `cd` in the command must win over a different shell workdir.
+  // The old resolver used the workdir first and derived "carlos" from the
+  // session home, rejecting the correct agent-evals/ prefix.
+  const foreignCwd = join(branchRoot, "carlos");
+  mkdirSync(foreignCwd);
+  await plugin.setup({ ...ctx, location: { directory: foreignCwd } });
+  await assert.rejects(
+    async () =>
+      before("cd-prefix", "shell", {
+        command: `cd ${branchRepo} && git switch -c carlos/feat-wrong-prefix`,
+        workdir: foreignCwd,
+      }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
+  await before("cd-prefix", "shell", {
+    command: `cd ${branchRepo} && git switch -c agent-evals/feat-from-cd`,
+    workdir: foreignCwd,
+  });
 } finally {
   rmSync(branchRoot, { recursive: true, force: true });
 }
