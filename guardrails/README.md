@@ -95,15 +95,14 @@ unaffected. `HARNESS_GUARD=log` records these decisions without blocking and
 Every other branch must follow:
 
 ```text
-<repo>/<type>-<short-description>
+<repo-folder>/<type>-<short-description>
 ```
 
-For this repository the prefix is `agent-evals/`, as in
+The prefix is the repository folder name, resolved from the common git dir, so
+renaming the checkout changes it automatically. For example,
 `agent-evals/feat-agent-harness-first-loop`. Allowed types: `feat`, `fix`,
 `chore`, `docs`, `test`, `refactor`, `perf`, `ci`, `build`, `style`. The
 description is lowercase letters, digits, and hyphens, starting with a letter or
 digit. The guard refuses `git switch -c` / `git checkout -b` with a
-non-conforming name and refuses a write on a non-conforming branch. The prefix
-comes from the repository name (the common git dir), so the check still works
-inside a worktree.
+non-conforming name and refuses a write on a non-conforming branch.
 
