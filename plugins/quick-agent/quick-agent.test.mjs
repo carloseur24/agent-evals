@@ -5,6 +5,7 @@ import plugin, {
   __test,
   auditAeo,
   formatAnswer,
+  isExplanationPrompt,
   isSafeUrl,
   jaccard,
   normalizeQuery,
@@ -13,6 +14,7 @@ import plugin, {
   stripHtml,
   truncateText,
   validateAnswer,
+  validateExplanation,
   websearchPayload,
 } from './index.js';
 
@@ -171,6 +173,50 @@ test('formatAnswer builds the canonical template and rejects unverified sources'
   );
   assert.equal(invented.ok, false);
   assert.match(invented.issues.join(' '), /unverified source URL/);
+
+  const long = formatAnswer({ solution: 'x'.repeat(401), unverified: true }, verified);
+  assert.equal(long.ok, false);
+  assert.match(long.issues.join(' '), /too long/);
+
+  const withExplanation = formatAnswer(
+    {
+      solution: 'Squash rewrites commit identity.',
+      explanation:
+        '**Why**\n\nA stack depends on commit identity.\n\n**Bad**\n- Squash.\n\n**Good**\n- Merge commit.',
+      unverified: true,
+    },
+    verified,
+  );
+  assert.equal(withExplanation.ok, true);
+  assert.match(withExplanation.text, /\*\*Why\*\*/);
+  assert.match(withExplanation.text, /\*\*Bad\*\*/);
+});
+
+test('isExplanationPrompt detects explanation requests without catching lookups', () => {
+  assert.equal(isExplanationPrompt('explain to me why squash is wrong'), true);
+  assert.equal(isExplanationPrompt('walk me through the merge flow'), true);
+  assert.equal(isExplanationPrompt('how does a stack merge work?'), true);
+  assert.equal(isExplanationPrompt('how do I format a date in bash?'), false);
+});
+
+test('validateExplanation accepts a structured explanation and rejects a dense wall', () => {
+  const readable = [
+    '**The mechanism**',
+    '',
+    'A stack is a chain of branches. Each branch sits on the previous one.',
+    '',
+    '**Good approach**',
+    '- Merge with a merge commit.',
+    '',
+    '**Bad approach**',
+    '- Squash rewrites the base.',
+  ].join('\n');
+  assert.equal(validateExplanation(readable).ok, true);
+
+  const dense = `${'This is one long paragraph. '.repeat(40)}Good and bad.`;
+  const validation = validateExplanation(dense);
+  assert.equal(validation.ok, false);
+  assert.match(validation.issues.join(' '), /paragraph too long|headings or bullet lists/);
 });
 
 test('validateAnswer catches missing headings, preamble, and unverified links', () => {
