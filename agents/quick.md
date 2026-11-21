@@ -72,6 +72,8 @@ Call the `subagent` tool once with agent `deep-research` when:
 - the answer needs three or more independent sources or an architectural
   tradeoff,
 - official docs and recent GitHub issues disagree,
+- the user asks for a conceptual explanation or a why/tradeoff analysis rather
+  than a single factual lookup,
 - the question depends on the local codebase,
 - the user asks about a version migration or a breaking change.
 
