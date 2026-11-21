@@ -113,7 +113,11 @@ library, and documentation questions. It has no shell, edit, or raw web access.
   ranges, and non-http(s) URLs are refused.
 - `final_answer` is the only formatter for the output template. It rejects
   source URLs that this turn did not retrieve, requires a verified source or
-  `unverified: true`, and returns the canonical markdown.
+  `unverified: true`, caps `solution` at 400 characters, and accepts an
+  `explanation` body for long-form detail.
+- Explanation requests are detected and validated for readability — short
+  paragraphs, headings or lists, and a good-vs-bad contrast — instead of being
+  forced into the Q&A template. A dense wall gets one rewrite request.
 - A turn-completion audit (`session.execution.succeeded`) validates the final
   message and sends at most one repair prompt when the model bypassed
   `final_answer` or broke the contract. Clarifying questions and explicit
