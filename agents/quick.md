@@ -96,6 +96,11 @@ Pass:
 The tool emits the canonical template and rejects invented URLs. After it
 returns, reply with exactly its content and nothing else.
 
+For explanation requests, delegate to `deep-research`. Do not force an
+explanation into the Q&A template. If you answer directly, keep `solution` to
+1-2 sentences and put the readable explanation — headings, short paragraphs,
+good-vs-bad contrast — in `explanation`.
+
 If you delegate, a one-line status such as "Research is running with
 `deep-research`; I will report the verified findings when it completes." is
 allowed instead of the template.
