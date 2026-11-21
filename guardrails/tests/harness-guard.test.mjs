@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import plugin, {
@@ -259,6 +259,14 @@ try {
 } finally {
   rmSync(branchRoot, { recursive: true, force: true });
 }
+
+// Explanation mode is part of the harness contract, not optional prose.
+const instructions = readFileSync(
+  new URL("../instructions/harness-invariants.md", import.meta.url),
+  "utf8",
+);
+assert.match(instructions, /Feynman technique/);
+assert.match(instructions, /ADHD\/dyslexic readability/);
 
 if (originalMode === undefined) delete process.env.HARNESS_GUARD;
 else process.env.HARNESS_GUARD = originalMode;
