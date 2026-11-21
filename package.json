@@ -13,6 +13,7 @@
     "new": "node scripts/new-case.mjs",
     "from-session": "node scripts/from-session.mjs",
     "guard:test": "node --test guardrails/tests/harness-guard.test.mjs",
+    "quick:test": "node --test plugins/quick-agent/quick-agent.test.mjs",
     "install:guardrails": "bash guardrails/scripts/install.sh",
     "doctor:guardrails": "node guardrails/scripts/doctor.mjs"
   }

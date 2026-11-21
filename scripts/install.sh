@@ -4,7 +4,12 @@
 # Creates:
 #   ~/.config/opencode/agent-evals       -> <repo>
 #   ~/.config/opencode/evals             -> <repo>/runner
-#   ~/.config/opencode/agents/eval-judge.md -> <repo>/agents/eval-judge.md
+#   ~/.config/opencode/agents/<name>.md  -> <repo>/agents/<name>.md
+#   ~/.config/opencode/plugins/<name>    -> <repo>/plugins/<name>
+#
+# Every Markdown file in agents/ and every entry in plugins/ is published as
+# one link, so adding an agent or a plugin means adding the file and rerunning
+# this installer.
 #
 # Also runs guardrails/scripts/install.sh, which wires the runtime guardrails
 # and syncs the managed harness-invariants block in AGENTS.md.
@@ -33,7 +38,14 @@ Wire this repository into the OpenCode config paths used by existing commands.
 Creates:
   ~/.config/opencode/agent-evals          -> <repo>
   ~/.config/opencode/evals                -> <repo>/runner
-  ~/.config/opencode/agents/eval-judge.md -> <repo>/agents/eval-judge.md
+  ~/.config/opencode/agents/<name>.md     -> <repo>/agents/<name>.md
+                                           (one link per agent file)
+  ~/.config/opencode/plugins/<name>       -> <repo>/plugins/<name>
+                                           (one link per plugin entry)
+
+Every Markdown file in agents/ and every entry in plugins/ is published as one
+link, so adding an agent or a plugin means adding the file and rerunning this
+installer.
 
 Also runs guardrails/scripts/install.sh for the runtime guardrails:
   ~/.config/opencode/plugins/harness-guard.js -> <repo>/guardrails/plugins/harness-guard.js
@@ -97,7 +109,19 @@ link_path() {
 
 link_path "$ROOT" "$CONFIG_HOME/agent-evals"
 link_path "$ROOT/runner" "$CONFIG_HOME/evals"
-link_path "$ROOT/agents/eval-judge.md" "$CONFIG_HOME/agents/eval-judge.md"
+
+# Publish every agent in agents/ as its own config symlink, so the repository
+# is the single source of truth for the global agent definitions it owns.
+for agent in "$ROOT"/agents/*.md; do
+    [ -f "$agent" ] || continue
+    link_path "$agent" "$CONFIG_HOME/agents/${agent##*/}"
+done
+
+# Publish every runtime plugin the repository owns.
+for plugin in "$ROOT"/plugins/*; do
+    [ -e "$plugin" ] || continue
+    link_path "$plugin" "$CONFIG_HOME/plugins/${plugin##*/}"
+done
 
 if [ "$FORCE" -eq 1 ]; then
     sh "$ROOT/guardrails/scripts/install.sh" --force
