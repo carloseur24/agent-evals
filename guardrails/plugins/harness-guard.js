@@ -23,6 +23,12 @@ import { basename, isAbsolute, join, resolve } from "node:path";
  * style. Creating a branch with git switch -c or git checkout -b is allowed
  * only when the new name matches. Read-only git commands are unaffected.
  *
+ * Shell wrappers are unwrapped before the git check: `bash -c "git commit"`,
+ * `sh -c`, `env git commit`, `sudo git ...`, and `... | xargs git commit` are
+ * judged as the git command they run. The repository is resolved from an
+ * explicit workdir, `git -C <dir>`, or a leading `cd <dir>`, then the session
+ * directory, so a command is judged against the repo it actually touches.
+ *
  * This is a constraint, not advice. Prose cannot enforce any invariant.
  *
  * Modes: HARNESS_GUARD=enforce (default), log, off.
@@ -82,6 +88,18 @@ const DELEGATION_TOOLS = new Set(["subagent", "task"]);
 const DIRECT_MUTATION_TOOLS = new Set(["edit", "write", "apply_patch", "patch"]);
 const MUTATING_SHELL_RE =
   /\b(?:sed\s+-i|perl\s+-[a-z]*i|tee\b|truncate\b|rm\b|mv\b|cp\b|touch\b|mkdir\b|chmod\b|chown\b|git\s+apply|git\s+checkout\s+--|git\s+reset\b|git\s+clean\b)\b|\s>{1,2}\s*\S/;
+const SHELL_INTERPRETERS = new Set(["bash", "sh", "zsh", "dash", "ksh", "fish"]);
+const WRAPPER_COMMANDS = new Set([
+  "env",
+  "command",
+  "exec",
+  "nohup",
+  "time",
+  "sudo",
+  "xargs",
+  "builtin",
+  "stdbuf",
+]);
 
 let baseDir = process.cwd();
 const sessions = new Map();
@@ -124,6 +142,80 @@ function shellWords(text) {
     words.push(match[1] ?? match[2] ?? match[3]);
   }
   return words;
+}
+
+/**
+ * Expand one command segment into every command it can actually run. Shell
+ * interpreters (`bash -c "<script>"`) and pass-through wrappers (`env`,
+ * `command`, `exec`, `nohup`, `time`, `sudo`, `xargs`, ...) are unwrapped so a
+ * git write cannot hide behind them.
+ */
+function commandCandidates(segment) {
+  const candidates = [];
+  const visit = (text, depth) => {
+    const value = String(text || "").trim();
+    if (!value || depth > 4) return;
+
+    const words = shellWords(value);
+    if (words.length === 0) return;
+
+    let index = 0;
+    while (index < words.length && /^[A-Za-z_]\w*=/.test(words[index])) index += 1;
+    const head = words[index];
+    if (!head) return;
+
+    if (SHELL_INTERPRETERS.has(head)) {
+      const flagIndex = words.findIndex(
+        (word, position) =>
+          position > index && /^-[A-Za-z]*c[A-Za-z]*$/.test(word),
+      );
+      const script = flagIndex === -1 ? "" : words[flagIndex + 1];
+      if (script) {
+        candidates.push(script);
+        visit(script, depth + 1);
+      }
+      return;
+    }
+
+    if (WRAPPER_COMMANDS.has(head)) {
+      let position = index + 1;
+      while (
+        position < words.length &&
+        (words[position].startsWith("-") || /^[A-Za-z_]\w*=/.test(words[position]))
+      ) {
+        position += 1;
+      }
+      const rest = words.slice(position).join(" ");
+      if (rest) {
+        candidates.push(rest);
+        visit(rest, depth + 1);
+      }
+      return;
+    }
+
+    candidates.push(words.slice(index).join(" "));
+  };
+
+  visit(segment, 0);
+  return candidates;
+}
+
+function stripQuotes(value) {
+  return String(value || "").replace(/^["']|["']$/g, "");
+}
+
+/** Directory named by `git -C <dir>`, if any. */
+function gitDirFromCommand(command) {
+  const match = String(command || "").match(/\bgit\s+-C\s+("[^"]+"|'[^']*'|\S+)/);
+  return match ? stripQuotes(match[1]) : null;
+}
+
+/** Directory named by a leading `cd <dir>` in the command, if any. */
+function cdDirFromCommand(command) {
+  const match = String(command || "").match(
+    /(?:^|\n|;|&&)\s*cd\s+("[^"]+"|'[^']*'|\S+)/,
+  );
+  return match ? stripQuotes(match[1]) : null;
 }
 
 function protectedRefspec(refspec) {
@@ -204,7 +296,15 @@ function branchConvention(repoDir) {
 
 function repoDirFor(args = {}) {
   const value = args.cwd || args.workdir;
-  return value ? absolutePath(value) : baseDir;
+  if (value) return absolutePath(value);
+
+  const command = shellCommand("shell", args);
+  const gitDir = gitDirFromCommand(command);
+  if (gitDir) return absolutePath(gitDir);
+  const cdDir = cdDirFromCommand(command);
+  if (cdDir) return absolutePath(cdDir);
+
+  return baseDir;
 }
 
 function shellCommand(tool, args = {}) {
@@ -224,28 +324,32 @@ function conventionReason(name, convention) {
 function gitBranchViolation(command, repoDir) {
   const convention = branchConvention(repoDir);
   for (const segment of commandSegments(command)) {
-    const create = segment.match(GIT_CREATE_RE);
-    if (create) {
-      const name = create[1].replace(/^["']|["']$/g, "");
-      if (!convention.pattern.test(name)) return conventionReason(name, convention);
-      continue;
-    }
-
-    const match = segment.match(GIT_WRITE_RE);
-    if (!match) continue;
-    const verb = match[1].toLowerCase();
-    if (verb === "push") {
-      const target = pushTargetsProtected(segment.slice(match.index + match[0].length));
-      if (target) {
-        return `git push targets ${target}. Push a feature branch or open a pull request.`;
+    for (const candidate of commandCandidates(segment)) {
+      const create = candidate.match(GIT_CREATE_RE);
+      if (create) {
+        const name = stripQuotes(create[1]);
+        if (!convention.pattern.test(name)) return conventionReason(name, convention);
+        continue;
       }
+
+      const match = candidate.match(GIT_WRITE_RE);
+      if (!match) continue;
+      const verb = match[1].toLowerCase();
+      if (verb === "push") {
+        const target = pushTargetsProtected(
+          candidate.slice(match.index + match[0].length),
+        );
+        if (target) {
+          return `git push targets ${target}. Push a feature branch or open a pull request.`;
+        }
+      }
+      const branch = currentBranch(repoDir);
+      if (!branch) continue;
+      if (PROTECTED_BRANCHES.has(branch)) {
+        return `protected branch "${branch}": git ${verb} is blocked. Switch to a feature branch before writing to git.`;
+      }
+      if (!convention.pattern.test(branch)) return conventionReason(branch, convention);
     }
-    const branch = currentBranch(repoDir);
-    if (!branch) continue;
-    if (PROTECTED_BRANCHES.has(branch)) {
-      return `protected branch "${branch}": git ${verb} is blocked. Switch to a feature branch before writing to git.`;
-    }
-    if (!convention.pattern.test(branch)) return conventionReason(branch, convention);
   }
   return null;
 }
@@ -421,6 +525,29 @@ function explicitPhase(args = {}) {
 }
 
 /**
+ * True when the delegation call itself names the phase it executes. An explicit
+ * `phase` argument always counts; otherwise the description/prompt/title must
+ * mention `Phase N` (or the Spanish/alternate spellings). This stops an
+ * unrelated subagent call from unlocking the current phase.
+ */
+function delegationTargetsPhase(args = {}, index) {
+  if (index < 0) return false;
+  if (explicitPhase(args) !== null) return true;
+
+  const number = index + 1;
+  const text = ["description", "prompt", "title", "message", "name"]
+    .filter((key) => typeof args[key] === "string")
+    .map((key) => args[key])
+    .join("\n");
+  if (!text) return false;
+
+  return new RegExp(
+    `\\b(?:phase|fase|etapa|stage|paso)\\s*#?\\s*${number}\\b`,
+    "i",
+  ).test(text);
+}
+
+/**
  * Pure policy decision point. Returns true when the call must be blocked.
  * Kept separate from the hook so it is testable without OpenCode.
  */
@@ -435,9 +562,16 @@ export function shouldBlock(sessionID, tool, args = {}) {
       refreshPlan(state);
       const phase = explicitPhase(args);
       const target = phase === null ? state.currentPhase : phase;
-      if (target >= 0 && target < state.phases.length) {
+      const phaseID = target >= 0 ? String(state.phases[target]?.id ?? "") : "";
+      const structured = /^\d+$/.test(phaseID);
+      const targetsCurrent = delegationTargetsPhase(args, state.currentPhase);
+      if (target >= 0 && target < state.phases.length && (!structured || targetsCurrent)) {
         state.delegatedPhases.add(target);
         log(`delegated session=${sessionID} tool=${tool} phase=${target + 1}`);
+      } else if (target >= 0 && target < state.phases.length) {
+        log(
+          `delegated session=${sessionID} tool=${tool} phase=unmatched current=${state.currentPhase + 1}`,
+        );
       } else {
         log(`delegated session=${sessionID} tool=${tool} phase=none`);
       }
