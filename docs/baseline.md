@@ -45,6 +45,36 @@ columns are unchanged. See [LLM judge calibration](#llm-judge-calibration).
 deterministic check passes except Haiku E1's `final_gate_ran`; that is the only
 failing check in the baseline.
 
+## Guard and eval hardening (2026-11-21)
+
+Run on `agent-evals/feat-harden-guard-and-evals`, model
+`opencode-go/deepseek-v4.1-flash`:
+
+| Case | Pass | Checks | Notes |
+|---|---|---|---|
+| `e1-delegation` | PASS | 9/9 | plan gate now requires the delegation to name its phase |
+| `e2-fast-change` | PASS | 6/6 | unchanged |
+| `e3-stop-rule` | PASS | 7/7 | unchanged |
+| `e4-subagent` | PASS | 5/5 | `report_quality` 0.50 is now marked `ADVISORY-FAIL` in the table |
+| `e5-guard-branch` | PASS | 2/2 | guard denial observed twice in a real session; no files changed |
+
+Changes covered by this run:
+
+- `guard_denials_min` is a new deterministic check: it counts parent tool calls
+  rejected by the runtime `harness-guard`. `e5-guard-branch` is the first case
+  that fails if the plugin stops loading, because the denial never appears.
+- The guard unwraps `bash -c`, `sh -c`, `env`, `command`, `exec`, `nohup`,
+  `time`, `sudo`, `xargs`, and `builtin` before matching a git write, so a
+  wrappered `git commit`/`git push`/`git merge` is judged as the git command.
+- A structured plan phase is unlocked only by a delegation whose explicit
+  `phase` argument or description/prompt names that phase; an unrelated
+  subagent call no longer unlocks edits. Unstructured plans keep the old
+  one-delegation gate.
+- The repository is resolved from an explicit `workdir`, `git -C <dir>`, or a
+  leading `cd <dir>` before falling back to the session directory.
+- Judge scores below threshold are rendered as `ADVISORY-FAIL`, with a summary
+  line after the `--all` table. Exit codes are still governed by hard checks.
+
 ## Real behavioral difference
 
 **E1 delegation, plan final gate.** DeepSeek delegated the plan's final gate and

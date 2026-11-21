@@ -1087,11 +1087,13 @@ async function runAll(options) {
     const entries = Object.values(judges ?? {});
     if (entries.length === 0) return '-';
     return entries
-      .map((judge) =>
-        judge.status === 'ok'
-          ? `${judge.name}=${Number(judge.score).toFixed(2)}`
-          : `${judge.name}=${judge.status}`,
-      )
+      .map((judge) => {
+        if (judge.status !== 'ok') return `${judge.name}=${judge.status}`;
+        const score = Number(judge.score).toFixed(2);
+        return judge.advisory_pass
+          ? `${judge.name}=${score}`
+          : `${judge.name}=${score} ADVISORY-FAIL`;
+      })
       .join(',');
   };
 
@@ -1115,6 +1117,16 @@ async function runAll(options) {
   console.log(render(header));
   console.log(render(widths.map((width) => '-'.repeat(width))));
   for (const row of rows) console.log(render(row));
+
+  const advisoryFails = summaries
+    .flatMap((summary) => Object.values(summary.judges ?? {}))
+    .filter((judge) => judge.status === 'ok' && judge.advisory_pass === false);
+  if (advisoryFails.length > 0) {
+    console.log('');
+    console.log(
+      `advisory: ${advisoryFails.length} judge score(s) below threshold (recorded only; exit code is unchanged)`,
+    );
+  }
 
   return anyFailed ? 1 : 0;
 }
