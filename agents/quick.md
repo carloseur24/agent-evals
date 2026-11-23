@@ -2,7 +2,7 @@
 description: Fast, source-cited answers for CLI flags, library syntax, and single-doc fixes. Delegates multi-hop work.
 mode: primary
 model: opencode-go/deepseek-v4.1-flash#low
-steps: 3
+steps: 5
 permissions:
   - action: "*"
     resource: "*"

@@ -120,10 +120,11 @@ library, and documentation questions. It has no shell, edit, or raw web access.
   forced into the Q&A template. A dense wall gets one rewrite request.
 - A turn-completion audit (`session.execution.succeeded`) validates the final
   message and sends at most one repair prompt when the model bypassed
-  `final_answer` or broke the contract. Clarifying questions and explicit
-  `deep-research` escalation statuses are exempt.
+  `final_answer` or broke the contract. Clarifying questions, explicit
+  `deep-research` escalation statuses, and runtime “Maximum steps” summaries are
+  exempt.
 - The plugin also enforces the 18-second retrieval cutoff, query and URL
-  deduplication, and the two-failure source breaker. `quick` has `steps: 3`;
+  deduplication, and the two-failure source breaker. `quick` has `steps: 5`;
   `deep-research` has `steps: 14`.
 
 No `opencode.json` change is needed. Use it with `opencode --agent quick` or by
