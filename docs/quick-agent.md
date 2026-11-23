@@ -8,7 +8,7 @@ tools and deterministic circuit breakers.
 ## Files
 
 ```text
-agents/quick.md                  primary, steps: 3, model variant #low
+agents/quick.md                  primary, steps: 5, model variant #low
 agents/deep-research.md          subagent, steps: 14, model variant #high
 plugins/quick-agent/index.js     fast_search, fast_fetch, circuit breakers
 plugins/quick-agent/quick-agent.test.mjs
@@ -163,6 +163,11 @@ V2 has no public hook for rewriting a stored assistant message, and the
 `session.idle` event is ephemeral rather than delivered to plugin streams. The
 `final_answer` tool is the deterministic path; the completion audit is the
 safety net.
+
+The runtime's forced **Maximum steps** summary is treated as final. The audit
+does not rewrite it, which avoids the noisy “good answer → correction” effect.
+`quick` has `steps: 5` so search, one fetch, `final_answer`, and the reply fit
+before the cap.
 
 ## Circuit breakers
 

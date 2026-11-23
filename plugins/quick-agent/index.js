@@ -43,6 +43,10 @@ export function isExplanationPrompt(text) {
   return EXPLANATION_RE.test(String(text || ''));
 }
 
+export function isRuntimeSummary(text) {
+  return /^\s*Maximum steps for this agent have been reached/i.test(String(text || ''));
+}
+
 const OFFICIAL_HOSTS = new Set([
   'developer.mozilla.org',
   'docs.python.org',
@@ -488,8 +492,11 @@ export function validateExplanation(text) {
 }
 
 function repairPrompt(issues, verifiedUrls) {
-  const allowed = verifiedUrls.length
-    ? verifiedUrls.map((url) => `- ${url}`).join('\n')
+  const allowedUrls = [...new Set(verifiedUrls)]
+    .filter((url) => !/\.([a-z0-9]+)\.\1$/i.test(url))
+    .slice(0, 8);
+  const allowed = allowedUrls.length
+    ? allowedUrls.map((url) => `- ${url}`).join('\n')
     : '- (none verified this turn)';
   return [
     'Your previous reply did not pass the output contract:',
@@ -1016,6 +1023,10 @@ async function auditIdle(ctx, sessionID) {
     );
     return;
   }
+
+  // The runtime's forced summary is already the final user-visible message.
+  // Rewriting it with the output template only creates a noisy self-correction.
+  if (isRuntimeSummary(text)) return;
 
   if (isEscalationStatus(text)) return;
   if (!text.includes('**Solution:**') && /\?\s*$/.test(text)) return;

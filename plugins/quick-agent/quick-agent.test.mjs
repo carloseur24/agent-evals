@@ -13,6 +13,7 @@ import plugin, {
   scoreAeo,
   stripHtml,
   truncateText,
+  isRuntimeSummary,
   validateAnswer,
   validateExplanation,
   websearchPayload,
@@ -197,6 +198,16 @@ test('isExplanationPrompt detects explanation requests without catching lookups'
   assert.equal(isExplanationPrompt('walk me through the merge flow'), true);
   assert.equal(isExplanationPrompt('how does a stack merge work?'), true);
   assert.equal(isExplanationPrompt('how do I format a date in bash?'), false);
+});
+
+test('isRuntimeSummary detects the forced max-steps message', () => {
+  assert.equal(
+    isRuntimeSummary(
+      'Maximum steps for this agent have been reached, so tools are now disabled. Here is a summary of the turn.',
+    ),
+    true,
+  );
+  assert.equal(isRuntimeSummary('**Solution:** Use `composer install --no-dev`.'), false);
 });
 
 test('validateExplanation accepts a structured explanation and rejects a dense wall', () => {
