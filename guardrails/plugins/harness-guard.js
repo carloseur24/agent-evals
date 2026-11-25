@@ -272,10 +272,45 @@ function escapeRegExp(value) {
 }
 
 /**
- * Repository name used as the branch prefix. The common git dir keeps this
- * correct inside a worktree, where the checkout directory has another name.
+ * Project name inferred from existing branch names. A checkout directory is
+ * often just an install location (`.agents`, `src`, a worktree), while the
+ * project's own name lives in its branch history as `<project>/<type>-<desc>`.
+ */
+function inferredRepoName(repoDir) {
+  const branches = gitOutput(repoDir, [
+    "for-each-ref",
+    "--format=%(refname:short)",
+    "refs/heads",
+    "refs/remotes",
+  ]);
+  if (!branches) return null;
+  const pattern = new RegExp(`^([^/]+)/(?:${BRANCH_TYPES.join("|")})-[a-z0-9][a-z0-9-]*$`);
+  const counts = new Map();
+  for (const branch of branches.split("\n")) {
+    const name = branch.trim().replace(/^origin\//, "");
+    const match = pattern.exec(name);
+    if (!match) continue;
+    const prefix = match[1];
+    if (prefix === "." || prefix.startsWith(".")) continue;
+    counts.set(prefix, (counts.get(prefix) || 0) + 1);
+  }
+  let best = null;
+  for (const [prefix, count] of counts) {
+    if (!best || count > best[1] || (count === best[1] && prefix < best[0])) {
+      best = [prefix, count];
+    }
+  }
+  return best ? best[0] : null;
+}
+
+/**
+ * Repository name used as the branch prefix. Prefers the name recorded in the
+ * branch history, since the checkout directory may just be an install path.
+ * The common git dir keeps this correct inside a worktree.
  */
 function repoName(repoDir) {
+  const inferred = inferredRepoName(repoDir);
+  if (inferred) return inferred;
   for (const args of [
     ["rev-parse", "--path-format=absolute", "--git-common-dir"],
     ["rev-parse", "--show-toplevel"],
