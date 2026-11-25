@@ -28,6 +28,7 @@ docs/baseline.md          model/agent/case baseline and recorded runs
 docs/plan.md              original build plan and phase record
 docs/factory.md           capture a real session into a case in ~30 minutes
 docs/quick-agent.md       quick-agent architecture and V2 mapping
+docs/operator-agent.md    operator agent: tool-free terminal answers
 scripts/                  run, install, doctor, validate, from-session, new-case
 guardrails/
   plugins/harness-guard.js      fast-change budget and per-phase plan gate
@@ -135,6 +136,30 @@ selecting `quick` in the TUI. Knobs:
 `QUICK_AGENT_AEO_MIN`, and `QUICK_AGENT_AEO_PAGE_MIN`.
 
 The plugin self-test is `pnpm quick:test`; the eval doctor runs it too.
+
+## Operator agent
+
+`agents/operator.md` is the tool-free counterpart for terminal work: git, shell,
+ssh, docker, and one-liners. It has no search, no fetch, no shell, and no file
+access — only the `question` tool — so it cannot start a search round trip or
+carry a stale citation. It answers with one sentence and one command, capped at
+twelve lines, and copies user-supplied identifiers byte-for-byte.
+
+Use `operator` when the question is known cold; use `quick` when the answer
+depends on current documentation, a version check, or a source URL. Full
+contract, V2 mapping, and metrics: [docs/operator-agent.md](docs/operator-agent.md).
+
+Both agents carry the same two behavioural rules, because both failed the same
+way in a real session:
+
+- literal fidelity — never prefix-strip or "correct" an identifier the user
+  typed;
+- trigger-word disambiguation — `cleanly`, `without`, `only`, `just`, `safe`,
+  and `properly` get one clarifying question instead of a guess.
+
+`quick` keeps `final_answer`, so its answers stay sourced; it now asks the user
+to leave `explanation` empty unless an explanation was requested. `operator`
+has no formatter, because there is nothing to cite.
 
 ## Run
 
