@@ -30,6 +30,19 @@ invented. Retrieval is AEO-first: the agent tries the best answer-engine
 optimized result first and falls back to the normal provider order when no AEO
 page answers.
 
+## Behaviour rules
+
+Three prompt-level rules close the failures `quick` showed in a real terminal
+session:
+
+| Rule | Behaviour | Failure it prevents |
+|---|---|---|
+| Literal fidelity | Identifiers are copied byte-for-byte; a suspicious value is kept and flagged `as typed: <value>` | Prefix-stripping a branch name the user typed, then failing the fetch |
+| Disambiguation | `cleanly`, `without`, `only`, `just`, `safe`, `properly` trigger one `question` and a stop | Silently answering one of three readings and needing three more turns |
+| Length | `solution` is 1–2 sentences; `explanation` stays empty unless asked | ~700 tokens of advisory prose for a one-command fix |
+
+`quick` has `steps: 6` so the clarifying question fits before the answer.
+
 ## V2 mapping
 
 The source specification uses V1 names. The implementation uses the V2 API:
