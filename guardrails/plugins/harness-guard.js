@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 
@@ -18,11 +18,14 @@ import { basename, isAbsolute, join, resolve } from "node:path";
  * current branch is main or master, in every session including child sessions.
  * A push that names main or master as its refspec is refused from any branch.
  * A write also requires a conforming branch name:
- *   <repo-folder>/<type>-<short-description>
+ *   <prefix>/<type>-<short-description>
  * where <type> is feat, fix, chore, docs, test, refactor, perf, ci, build, or
  * style. The prefix is the repository folder name (resolved from the common git
- * dir), so renaming the checkout changes it automatically. Creating a branch
- * with git switch -c or git checkout -b is allowed only when the new name
+ * dir), the name of a project directory inside the repository's apps/, libs/ or
+ * packages/ folders, or that project's short label (api, cobranza, ...), so
+ * per-project work can use its own prefix (for example cobranza/fix-...) while
+ * the repository name stays reserved for repository-wide changes. Creating a
+ * branch with git switch -c or git checkout -b is allowed only when the new name
  * matches. Read-only git commands are unaffected.
  *
  * Shell wrappers are unwrapped before the git check: `bash -c "git commit"`,
@@ -279,19 +282,60 @@ function repoName(repoDir) {
   ]) {
     const location = gitOutput(repoDir, args);
     if (!location) continue;
-    const name = basename(location.replace(/[\\/]\.git$/, "").replace(/\.git$/, ""));
+    // A checkout such as ~/.agents yields a dot-leading name, which git cannot
+    // use as a branch prefix at all. Strip leading dots so the convention stays
+    // satisfiable (`agents/<type>-<slug>`).
+    const name = basename(location.replace(/[\\/]\.git$/, "").replace(/\.git$/, ""))
+      .replace(/^\.+/, "");
     if (name) return name;
   }
   return basename(resolve(repoDir));
 }
 
+/**
+ * Project directory names that may be used as a branch prefix, so work scoped
+ * to one app or library does not have to borrow the repository name. The
+ * repository name itself stays valid for repository-wide changes.
+ *
+ * A dotted project directory also exposes its leading label, so
+ * `apps/api.dataemergencia.com` can use `api/...` and
+ * `apps/cobranza.dataemergencia.com` can use `cobranza/...` — the short prefix
+ * people actually say out loud. The full directory name stays valid.
+ */
+function projectPrefixes(repoDir) {
+  const root = gitOutput(repoDir, ["rev-parse", "--show-toplevel"]) || repoDir;
+  const names = new Set();
+  for (const group of ["apps", "libs", "packages"]) {
+    let entries = [];
+    try {
+      entries = readdirSync(join(root, group), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !/^[a-z0-9][a-z0-9._-]*$/.test(entry.name)) continue;
+      names.add(entry.name);
+      const short = entry.name.split(".")[0];
+      if (short !== entry.name && /^[a-z0-9][a-z0-9._-]*$/.test(short)) {
+        names.add(short);
+      }
+    }
+  }
+  return names;
+}
+
 function branchConvention(repoDir) {
   const repo = repoName(repoDir);
+  const prefixes = new Set([repo, ...projectPrefixes(repoDir)]);
+  const prefixPattern = [...prefixes]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join("|");
   return {
     pattern: new RegExp(
-      `^${escapeRegExp(repo)}/(?:${BRANCH_TYPES.join("|")})-[a-z0-9][a-z0-9-]*$`,
+      `^(?:${prefixPattern})/(?:${BRANCH_TYPES.join("|")})-[a-z0-9][a-z0-9-]*$`,
     ),
-    description: `${repo}/<type>-<short-description>`,
+    description: `${repo}/<type>-<short-description> or <project>/<type>-<short-description>`,
     types: BRANCH_TYPES.join(", "),
   };
 }
