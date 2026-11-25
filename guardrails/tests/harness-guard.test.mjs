@@ -256,6 +256,25 @@ try {
     command: `cd ${branchRepo} && git switch -c agent-evals/feat-from-cd`,
     workdir: foreignCwd,
   });
+
+  // A project directory may serve as the prefix, so work scoped to one app
+  // does not have to borrow the repository name. The repository name stays
+  // valid for repository-wide changes, and unknown prefixes stay refused.
+  mkdirSync(join(branchRepo, "apps", "api.example.com"), { recursive: true });
+  await before("project-prefix", "shell", {
+    command: `cd ${branchRepo} && git switch -c api.example.com/feat-project-branch`,
+  });
+  git("checkout", "-q", "-b", "api.example.com/feat-project-branch");
+  await before("project-prefix", "shell", {
+    command: `cd ${branchRepo} && git commit -m test`,
+  });
+  await assert.rejects(
+    async () =>
+      before("project-prefix", "shell", {
+        command: `cd ${branchRepo} && git switch -c unknown-project/feat-x`,
+      }),
+    /does not match agent-evals\/<type>-<short-description>/,
+  );
 } finally {
   rmSync(branchRoot, { recursive: true, force: true });
 }
